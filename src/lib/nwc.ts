@@ -2,11 +2,13 @@
  * Nostr Wallet Connect (NIP-47) Integration
  * Powered by @getalby/sdk
  * Provides authenticated, decentralized Lightning wallet operations
- * with sub-second execution and cryptographic Schnorr event signing.
+ * with sub-second execution, pre-flight safety guardrails, and audit trails.
  */
 
 import { NWCClient } from '@getalby/sdk';
-import { NWCWalletInfo, NWCWalletBalance } from '@/types/nwc';
+import { NWCWalletInfo, NWCWalletBalance, GuardedPaymentResult } from '@/types/nwc';
+import { InvoiceDecoder } from './invoice';
+import { paymentGuard } from './payment-guard';
 
 export class SatNavWalletService {
   private client: NWCClient | null = null;
@@ -51,9 +53,6 @@ export class SatNavWalletService {
     return this.client;
   }
 
-  /**
-   * Fetch connected wallet metadata and supported NIP-47 methods
-   */
   async getWalletInfo(): Promise<NWCWalletInfo> {
     const client = this.getClient();
     const info = await client.getInfo();
@@ -70,9 +69,6 @@ export class SatNavWalletService {
     };
   }
 
-  /**
-   * Fetch wallet balance in satoshis and millisatoshis
-   */
   async getWalletBalance(): Promise<NWCWalletBalance> {
     const client = this.getClient();
     const balanceResponse = await client.getBalance();
@@ -90,6 +86,55 @@ export class SatNavWalletService {
       balance_msat: balanceMsat,
       max_amount_sats: maxAmountSats,
       budget_renewal: balanceResponse.budget_renewal,
+    };
+  }
+
+  /**
+   * Execute a payment safely with pre-flight fee and budget guardrails
+   */
+  async payInvoiceGuarded(
+    invoiceStr: string,
+    maxFeeSatsOverride?: number
+  ): Promise<GuardedPaymentResult> {
+    const decoded = InvoiceDecoder.decode(invoiceStr);
+
+    // Heuristic routing fee estimate (0.2% or minimum 3 sats)
+    const estimatedFeeSats = Math.max(3, Math.ceil(decoded.amount_sats * 0.002));
+
+    // Safety validation
+    const validation = paymentGuard.validatePayment(
+      decoded,
+      maxFeeSatsOverride || estimatedFeeSats
+    );
+
+    if (!validation.safe) {
+      return {
+        success: false,
+        fee_paid_sats: 0,
+        fee_paid_msat: 0,
+        audit_timestamp: Date.now(),
+        error: `Safety Guard Blocked Payment: ${validation.reason}`,
+      };
+    }
+
+    const client = this.getClient();
+    const result = await client.payInvoice({
+      invoice: invoiceStr,
+    });
+
+    const feePaidMsat = Number(result.fees_paid) || 0;
+    const feePaidSats = Math.ceil(feePaidMsat / 1000);
+
+    paymentGuard.recordSpend(decoded.amount_sats);
+
+    return {
+      success: true,
+      preimage: result.preimage,
+      payment_hash: decoded.payment_hash,
+      fee_paid_sats: feePaidSats,
+      fee_paid_msat: feePaidMsat,
+      route_summary: `Direct / Routed via NWC to ${decoded.destination_pubkey.substring(0, 10)}...`,
+      audit_timestamp: Date.now(),
     };
   }
 }

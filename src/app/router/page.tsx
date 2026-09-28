@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   GitFork, 
@@ -17,7 +17,7 @@ import {
 import { KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RouteResult, RoutingStrategy } from '@/types/route';
 
-export default function RouterPage() {
+function RouterContent() {
   const searchParams = useSearchParams();
   const initialTarget = searchParams.get('target') || KNOWN_MAJOR_HUBS[2].pubkey; // Binance
 
@@ -340,3 +340,21 @@ export default function RouterPage() {
     </div>
   );
 }
+
+export default function RouterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#06080D] flex items-center justify-center font-mono text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#F7931A] live-pulse" />
+            <span>LOADING SATNAV ROUTER...</span>
+          </div>
+        </div>
+      }
+    >
+      <RouterContent />
+    </Suspense>
+  );
+}
+

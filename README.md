@@ -65,14 +65,14 @@ graph TD
 | **`/radar`** | **Topology Radar** | 2D Canvas interactive force-directed graph rendering real-time nodes and satoshi particle flows. |
 | **`/router`** | **Route Optimizer** | Multi-hop Dijkstra pathfinder with strategy selector (*Cheapest*, *Fastest*, *Reliable*, *Balanced*). |
 | **`/sentinel`** | **Fee Sentinel** | Network fee rate percentiles (p50, p90, p99), predatory fee alerts, and node reliability rankings. |
-| **`/agent`** | **Agent MCP Console** | Interactive playground for testing SatNav's MCP tools with real-time JSON-RPC 2.0 payloads. |
+| **`/agent`** | **Agent MCP Console** | Interactive playground for testing SatsNav's MCP tools with real-time JSON-RPC 2.0 payloads. |
 | **`/wallet`** | **NWC Guardian** | Connect Alby or any NIP-47 wallet, view balance, decode invoices, and dispatch guarded payments. |
 
 ---
 
 ## 4. Model Context Protocol (MCP) Integration
 
-SatNav implements the Anthropic Model Context Protocol specification. Any AI agent (Claude Desktop, Cursor, Antigravity) can connect directly to SatNav's tools:
+SatNav implements the Anthropic Model Context Protocol specification. Any AI agent (Claude Desktop, Cursor, Antigravity) can connect directly to SatsNav's tools:
 
 ### Available MCP Tools
 1. `find_optimal_route`: Returns lowest-fee, fastest, or most reliable path with hop breakdown.

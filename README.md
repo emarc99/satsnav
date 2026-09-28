@@ -72,7 +72,7 @@ graph TD
 
 ## 4. Model Context Protocol (MCP) Integration
 
-SatNav implements the Anthropic Model Context Protocol specification. Any AI agent (Claude Desktop, Cursor, Antigravity) can connect directly to SatsNav's tools:
+SatsNav implements the Anthropic Model Context Protocol specification. Any AI agent (Claude Desktop, Cursor, Antigravity) can connect directly to SatsNav's tools:
 
 ### Available MCP Tools
 1. `find_optimal_route`: Returns lowest-fee, fastest, or most reliable path with hop breakdown.

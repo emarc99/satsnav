@@ -109,8 +109,8 @@ Or query the HTTP API directly at `/api/mcp` using standard JSON-RPC 2.0.
 
 ### Installation
 ```bash
-git clone https://github.com/your-username/satnav.git
-cd satnav
+git clone https://github.com/emarc99/satsnav.git
+cd satsnav
 npm install
 ```
 

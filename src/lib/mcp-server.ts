@@ -81,6 +81,21 @@ export function createSatNavMCPServer(): Server {
             required: ['node_pubkey_or_alias'],
           },
         },
+        {
+          name: 'check_fee_sentinel',
+          description:
+            'Audit network fee percentiles (median, p90, p99) and detect whether a node or channel charges predatory fee rates.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              target_node: {
+                type: 'string',
+                description: 'Optional node alias or pubkey to evaluate for fee gouging.',
+              },
+            },
+            required: [],
+          },
+        },
       ],
     };
   });
@@ -154,6 +169,40 @@ export function createSatNavMCPServer(): Server {
           isError: true,
         };
       }
+    }
+
+    if (name === 'check_fee_sentinel') {
+      const graph = await buildLightningGraph();
+      const edges = graph.getAllEdges();
+      const ppmRates = edges.map((e) => e.feeProportionalMillionths);
+      const dist = FeeSentinel.analyzeFeeDistribution(ppmRates);
+
+      const targetNode = args?.target_node ? String(args.target_node) : undefined;
+      let targetGougeInfo: any = null;
+
+      if (targetNode) {
+        const pubkey = resolveNodeKey(targetNode);
+        const outgoing = graph.getOutgoingEdges(pubkey);
+        const avgPpm = outgoing.length > 0
+          ? Math.round(outgoing.reduce((a, b) => a + b.feeProportionalMillionths, 0) / outgoing.length)
+          : dist.p50MedianPpm;
+
+        targetGougeInfo = FeeSentinel.detectFeeGouging(avgPpm, dist);
+      }
+
+      const summary = `🛡️ SatNav Fee Sentinel Intelligence:
+• Network Median (p50): ${dist.p50MedianPpm} ppm
+• 90th Percentile (p90): ${dist.p90Ppm} ppm
+• 99th Percentile (p99): ${dist.p99Ppm} ppm
+• Monitored Channels: ${dist.sampleSize.toLocaleString()}
+${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.severity.toUpperCase()} (${targetGougeInfo.hopPpm} ppm)\n• Recommendation: ${targetGougeInfo.recommendation}` : ''}`;
+
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify({ distribution: dist, target_audit: targetGougeInfo }, null, 2) },
+        ],
+      };
     }
 
     throw new Error(`Tool not found: ${name}`);

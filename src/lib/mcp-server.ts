@@ -1,7 +1,7 @@
 /**
  * SatNav Model Context Protocol (MCP) Server
  * Exposes Bitcoin Lightning Network pathfinding, fee anomaly detection,
- * and guarded payment dispatching to AI agent runtimes (Claude, Cursor, Antigravity).
+ * node liquidity probing, and guarded payment dispatching to AI agent runtimes.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -11,6 +11,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { buildLightningGraph } from './graph-builder';
 import { LightningRouter } from './router';
+import { FeeSentinel } from './sentinel';
+import { mempoolClient } from './mempool';
 import { findKnownNode, KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RoutingStrategy } from '@/types/route';
 
@@ -33,7 +35,6 @@ export function createSatNavMCPServer(): Server {
     }
   );
 
-  // Register tools list
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
@@ -65,11 +66,25 @@ export function createSatNavMCPServer(): Server {
             required: ['target_node', 'amount_sats'],
           },
         },
+        {
+          name: 'probe_node_liquidity',
+          description:
+            'Inspect a Lightning node capacity, active channel count, network reliability index, and geographical location.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              node_pubkey_or_alias: {
+                type: 'string',
+                description: 'Public key or alias of the target Lightning node.',
+              },
+            },
+            required: ['node_pubkey_or_alias'],
+          },
+        },
       ],
     };
   });
 
-  // Handle tool execution
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
@@ -110,6 +125,35 @@ export function createSatNavMCPServer(): Server {
           { type: 'text', text: JSON.stringify(route, null, 2) },
         ],
       };
+    }
+
+    if (name === 'probe_node_liquidity') {
+      const query = String(args?.node_pubkey_or_alias || '');
+      const pubkey = resolveNodeKey(query);
+
+      try {
+        const node = await mempoolClient.getNode(pubkey);
+        const rel = FeeSentinel.calculateNodeReliability(node);
+
+        const summary = `🔍 Node Telemetry for ${node.alias} (${pubkey.substring(0, 10)}...):
+• Reliability Tier: ${rel.tier} (${rel.score}/100)
+• Channels: ${rel.channelCount} active
+• Total Capacity: ${rel.capacityBtc} BTC
+• Node Age: ${rel.nodeAgeDays} days online
+• Stability Factors: ${rel.stabilityFactors.join(', ') || 'Standard'}`;
+
+        return {
+          content: [
+            { type: 'text', text: summary },
+            { type: 'text', text: JSON.stringify({ node, reliability: rel }, null, 2) },
+          ],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: 'text', text: `Failed to probe node: ${err.message}` }],
+          isError: true,
+        };
+      }
     }
 
     throw new Error(`Tool not found: ${name}`);

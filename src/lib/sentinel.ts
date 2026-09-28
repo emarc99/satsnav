@@ -1,6 +1,7 @@
 /**
  * SatNav Fee Sentinel & Network Risk Analyzer
- * Statistical distribution calculations and fee-gouging anomaly detection.
+ * Statistical distribution calculations, fee-gouging anomaly detection,
+ * and channel balance depletion risk scoring.
  */
 
 export interface FeeDistribution {
@@ -24,6 +25,14 @@ export interface FeeGougeAlert {
   excessPpm: number;
   multiplierVsMedian: number;
   recommendation: string;
+}
+
+export interface CapacityRiskResult {
+  riskLevel: 'safe' | 'moderate' | 'high' | 'critical';
+  riskScore: number; // 0 to 100
+  ratio: number; // payment / capacity
+  depletionProbability: number; // 0.0 to 1.0
+  warningMessage?: string;
 }
 
 export class FeeSentinel {
@@ -64,9 +73,6 @@ export class FeeSentinel {
     };
   }
 
-  /**
-   * Detect whether a specific channel hop fee rate constitutes predatory fee gouging
-   */
   static detectFeeGouging(
     hopPpm: number,
     distribution: FeeDistribution
@@ -125,6 +131,62 @@ export class FeeSentinel {
       excessPpm: 0,
       multiplierVsMedian,
       recommendation: `Fair fee rate (${hopPpm} ppm, at or below network median).`,
+    };
+  }
+
+  /**
+   * Score channel depletion risk based on payment size vs total channel capacity
+   */
+  static scoreCapacityRisk(
+    paymentAmountSats: number,
+    channelCapacitySats: number
+  ): CapacityRiskResult {
+    if (channelCapacitySats <= 0) {
+      return {
+        riskLevel: 'critical',
+        riskScore: 100,
+        ratio: 1.0,
+        depletionProbability: 1.0,
+        warningMessage: 'Channel has 0 reported capacity',
+      };
+    }
+
+    const ratio = paymentAmountSats / channelCapacitySats;
+
+    if (ratio > 0.5) {
+      return {
+        riskLevel: 'critical',
+        riskScore: 95,
+        ratio: Number(ratio.toFixed(4)),
+        depletionProbability: 0.85,
+        warningMessage: `High risk: Payment requires ${(ratio * 100).toFixed(1)}% of channel capacity. Directional depletion likely.`,
+      };
+    }
+
+    if (ratio > 0.2) {
+      return {
+        riskLevel: 'high',
+        riskScore: 70,
+        ratio: Number(ratio.toFixed(4)),
+        depletionProbability: 0.55,
+        warningMessage: `Payment size is ${(ratio * 100).toFixed(1)}% of channel capacity. Route may fail if remote balance is low.`,
+      };
+    }
+
+    if (ratio > 0.05) {
+      return {
+        riskLevel: 'moderate',
+        riskScore: 35,
+        ratio: Number(ratio.toFixed(4)),
+        depletionProbability: 0.20,
+      };
+    }
+
+    return {
+      riskLevel: 'safe',
+      riskScore: 10,
+      ratio: Number(ratio.toFixed(4)),
+      depletionProbability: 0.05,
     };
   }
 }

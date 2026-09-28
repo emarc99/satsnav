@@ -1,4 +1,4 @@
-# SatNav ⚡
+# SatsNav ⚡
 ### Autonomous Lightning Routing, Fee-Gouging Sentinel & Model Context Protocol (MCP) Agent
 
 > **"Navigate the Bitcoin Lightning Network with Cryptographic Precision."**  
@@ -14,7 +14,7 @@ Autonomous AI agents transacting on the Bitcoin Lightning Network face three fat
 2. **Liquidity Opacity:** Light clients and agents cannot see directional channel balance depletion before committing an HTLC.
 3. **Absence of Agent-Native Interfaces:** Existing explorers (Mempool, 1ML, Amboss) are built for humans, not autonomous agent swarms requiring standardized JSON-RPC protocols.
 
-**SatNav** solves this by providing:
+**SatsNav** solves this by providing:
 - **Zero-Mock Real Mainnet Topology:** Ingests live Bitcoin Lightning Network gossip directly from `mempool.space` (1,800+ nodes, 36,000+ public channels).
 - **Exact BOLT #7 Pathfinding Engine:** Multi-objective Dijkstra algorithm calculating deterministic multi-hop fees:
   $$\text{Fee}_{msat} = \text{base\_fee\_msat} + \left\lfloor \frac{A_{msat} \times \text{fee\_proportional\_millionths}}{1,000,000} \right\rfloor$$
@@ -34,7 +34,7 @@ graph TD
         M2 --> M3["Topology Cache & In-Memory Graph"]
     end
 
-    subgraph Core["2. SatNav Graph Engine"]
+    subgraph Core["2. SatsNav Graph Engine"]
         M3 --> G1["Directed Multigraph (BOLT #7)"]
         G1 --> G2["Multi-Objective Router<br/>(Cheapest / Fastest / Reliable)"]
         G1 --> G3["Fee Gouge Sentinel & Anomaly Detector"]

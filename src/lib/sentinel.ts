@@ -1,8 +1,11 @@
 /**
  * SatNav Fee Sentinel & Network Risk Analyzer
  * Statistical distribution calculations, fee-gouging anomaly detection,
- * channel balance depletion risk scoring, and node reliability indexing.
+ * channel balance depletion risk scoring, node reliability indexing,
+ * and comprehensive pre-flight payment risk audit reporting.
  */
+
+import { RouteResult, RouteHop } from '@/types/route';
 
 export interface FeeDistribution {
   minPpm: number;
@@ -36,12 +39,33 @@ export interface CapacityRiskResult {
 }
 
 export interface NodeReliabilityIndex {
-  score: number; // 0 to 100
+  score: number;
   tier: 'Elite Router' | 'Core Hub' | 'Standard Node' | 'Edge Node';
   channelCount: number;
   capacityBtc: number;
   nodeAgeDays: number;
   stabilityFactors: string[];
+}
+
+export interface PreFlightAuditReport {
+  verdict: 'APPROVED_SAFE' | 'CAUTION_HIGH_FEES' | 'CAUTION_CAPACITY_RISK' | 'REJECT_PREDATORY';
+  overallSafetyScore: number; // 0 to 100
+  totalFeeSats: number;
+  feePercentage: number;
+  hopCount: number;
+  flaggedGougeHops: Array<{
+    hopIndex: number;
+    nodeAlias: string;
+    ppm: number;
+    severity: string;
+  }>;
+  flaggedCapacityHops: Array<{
+    hopIndex: number;
+    nodeAlias: string;
+    ratioPercent: string;
+  }>;
+  savingsPotentialSats: number;
+  actionableSummary: string;
 }
 
 export class FeeSentinel {
@@ -196,9 +220,6 @@ export class FeeSentinel {
     };
   }
 
-  /**
-   * Calculate node reliability index based on connectivity, capacity, and maturity
-   */
   static calculateNodeReliability(node: {
     active_channel_count?: number;
     capacity?: number | string;
@@ -213,9 +234,8 @@ export class FeeSentinel {
     const nodeAgeDays = Math.max(1, Math.floor((nowSeconds - firstSeen) / 86400));
 
     const stabilityFactors: string[] = [];
-    let score = 20; // Base score
+    let score = 20;
 
-    // Channel connectivity weight (max 35 pts)
     if (channels >= 500) {
       score += 35;
       stabilityFactors.push('Tier-1 Connectivity (500+ channels)');
@@ -226,7 +246,6 @@ export class FeeSentinel {
       score += 15;
     }
 
-    // Capacity depth weight (max 25 pts)
     if (capacityBtc >= 100) {
       score += 25;
       stabilityFactors.push('Massive Liquidity Depth (100+ BTC)');
@@ -237,7 +256,6 @@ export class FeeSentinel {
       score += 10;
     }
 
-    // Maturity age weight (max 20 pts)
     if (nodeAgeDays >= 730) {
       score += 20;
       stabilityFactors.push('Battle-Tested Uptime (2+ years)');
@@ -262,6 +280,78 @@ export class FeeSentinel {
       capacityBtc,
       nodeAgeDays,
       stabilityFactors,
+    };
+  }
+
+  /**
+   * Generate comprehensive pre-flight payment risk audit report
+   */
+  static generatePreFlightAudit(
+    route: RouteResult,
+    distribution: FeeDistribution
+  ): PreFlightAuditReport {
+    const flaggedGougeHops: PreFlightAuditReport['flaggedGougeHops'] = [];
+    const flaggedCapacityHops: PreFlightAuditReport['flaggedCapacityHops'] = [];
+    let predatoryFound = false;
+
+    for (const hop of route.hops) {
+      const gougeAlert = this.detectFeeGouging(hop.fee_proportional_millionths, distribution);
+      if (gougeAlert.isGouging) {
+        if (gougeAlert.severity === 'predatory') predatoryFound = true;
+        flaggedGougeHops.push({
+          hopIndex: hop.hop_index,
+          nodeAlias: hop.to_node_alias,
+          ppm: hop.fee_proportional_millionths,
+          severity: gougeAlert.severity,
+        });
+      }
+
+      const capRisk = this.scoreCapacityRisk(route.amount_sats, hop.channel_capacity_sats);
+      if (capRisk.riskLevel === 'high' || capRisk.riskLevel === 'critical') {
+        flaggedCapacityHops.push({
+          hopIndex: hop.hop_index,
+          nodeAlias: hop.to_node_alias,
+          ratioPercent: `${(capRisk.ratio * 100).toFixed(1)}%`,
+        });
+      }
+    }
+
+    let verdict: PreFlightAuditReport['verdict'] = 'APPROVED_SAFE';
+    let overallSafetyScore = route.estimated_reliability_score;
+
+    if (predatoryFound) {
+      verdict = 'REJECT_PREDATORY';
+      overallSafetyScore = Math.min(overallSafetyScore, 20);
+    } else if (flaggedGougeHops.length > 0) {
+      verdict = 'CAUTION_HIGH_FEES';
+      overallSafetyScore = Math.min(overallSafetyScore, 50);
+    } else if (flaggedCapacityHops.length > 0) {
+      verdict = 'CAUTION_CAPACITY_RISK';
+      overallSafetyScore = Math.min(overallSafetyScore, 55);
+    }
+
+    const estimatedOptimalFeeSats = Math.max(1, Math.ceil(route.amount_sats * 0.0003));
+    const savingsPotential = Math.max(0, route.total_fee_sats - estimatedOptimalFeeSats);
+
+    let actionableSummary = 'Path is optimal with minimal fee impact and deep channel liquidity.';
+    if (verdict === 'REJECT_PREDATORY') {
+      actionableSummary = `REJECT: Predatory fee gouging detected on ${flaggedGougeHops.length} hop(s). Switch to 'cheapest' strategy to avoid overpaying ${savingsPotential} sats.`;
+    } else if (verdict === 'CAUTION_HIGH_FEES') {
+      actionableSummary = `CAUTION: Route fee rate is above 90th network percentile. Consider alternative paths to save up to ${savingsPotential} sats.`;
+    } else if (verdict === 'CAUTION_CAPACITY_RISK') {
+      actionableSummary = `CAUTION: ${flaggedCapacityHops.length} channel(s) operating near capacity limits. Risk of HTLC routing failure.`;
+    }
+
+    return {
+      verdict,
+      overallSafetyScore,
+      totalFeeSats: route.total_fee_sats,
+      feePercentage: route.fee_percentage,
+      hopCount: route.hop_count,
+      flaggedGougeHops,
+      flaggedCapacityHops,
+      savingsPotentialSats: savingsPotential,
+      actionableSummary,
     };
   }
 }

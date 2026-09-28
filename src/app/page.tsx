@@ -175,21 +175,25 @@ export default function HomePage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10 font-mono text-xs">
                 <div>
                   <div className="text-slate-500 text-[11px]">CHANNELS</div>
-                  <div className="text-white font-bold text-base mt-0.5">{searchResult.active_channel_count || '1,800+'}</div>
+                  <div className="text-white font-bold text-base mt-0.5">
+                    {searchResult.active_channel_count != null ? searchResult.active_channel_count.toLocaleString() : '0'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-500 text-[11px]">CAPACITY</div>
                   <div className="text-[#F7931A] font-bold text-base mt-0.5">
-                    {searchResult.capacity ? (Number(searchResult.capacity) / 1e8).toFixed(2) : '360.00'} BTC
+                    {(Number(searchResult.capacity || 0) / 1e8).toFixed(2)} BTC
                   </div>
                 </div>
                 <div>
                   <div className="text-slate-500 text-[11px]">LOCATION</div>
-                  <div className="text-slate-300 font-medium text-sm mt-1">{searchResult.iso_code || 'US / Global'}</div>
+                  <div className="text-slate-300 font-medium text-sm mt-1">{searchResult.iso_code || 'Global / Hidden'}</div>
                 </div>
                 <div>
                   <div className="text-slate-500 text-[11px]">SOCKETS</div>
-                  <div className="text-slate-400 font-medium text-xs mt-1 truncate">{searchResult.sockets ? 'Clearnet / Tor' : 'Tor Hidden'}</div>
+                  <div className="text-slate-400 font-medium text-xs mt-1 truncate">
+                    {searchResult.sockets ? 'Clearnet / Tor' : 'Tor / Private'}
+                  </div>
                 </div>
               </div>
             </div>

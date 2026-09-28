@@ -110,8 +110,21 @@ export class FeeSentinel {
     hopPpm: number,
     distribution: FeeDistribution
   ): FeeGougeAlert {
-    const median = Math.max(1, distribution.p50MedianPpm || 250);
-    const p90 = Math.max(median, distribution.p90Ppm || 1000);
+    if (!distribution || distribution.sampleSize === 0) {
+      return {
+        isGouging: false,
+        severity: 'none',
+        hopPpm,
+        networkMedianPpm: 0,
+        networkP90Ppm: 0,
+        excessPpm: 0,
+        multiplierVsMedian: 1.0,
+        recommendation: 'Insufficient network sample size to evaluate fee gouging.',
+      };
+    }
+
+    const median = Math.max(1, distribution.p50MedianPpm);
+    const p90 = Math.max(median, distribution.p90Ppm);
 
     const multiplierVsMedian = Number((hopPpm / median).toFixed(2));
     const excessPpm = Math.max(0, hopPpm - median);
@@ -225,16 +238,16 @@ export class FeeSentinel {
     capacity?: number | string;
     first_seen?: number;
   }): NodeReliabilityIndex {
-    const channels = node.active_channel_count || 1;
-    const capacitySats = Number(node.capacity) || 10_000_000;
+    const channels = Number(node.active_channel_count) || 0;
+    const capacitySats = Number(node.capacity) || 0;
     const capacityBtc = Number((capacitySats / 100_000_000).toFixed(2));
 
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const firstSeen = node.first_seen || (nowSeconds - 86400 * 30);
-    const nodeAgeDays = Math.max(1, Math.floor((nowSeconds - firstSeen) / 86400));
+    const firstSeen = node.first_seen || 0;
+    const nodeAgeDays = firstSeen > 0 ? Math.max(0, Math.floor((nowSeconds - firstSeen) / 86400)) : 0;
 
     const stabilityFactors: string[] = [];
-    let score = 20;
+    let score = channels > 0 || capacitySats > 0 ? 10 : 0;
 
     if (channels >= 500) {
       score += 35;

@@ -72,7 +72,7 @@ export default function RadarPage() {
               id: item.publicKey,
               alias: item.alias || item.publicKey.substring(0, 10),
               capacityBtc: Number(capacityBtc.toFixed(2)),
-              channels: item.channels || 100,
+              channels: item.channels ?? 0,
               color: known?.color || '#00F2FE',
               x: width / 2 + Math.cos(angle) * radiusDist,
               y: height / 2 + Math.sin(angle) * radiusDist,
@@ -423,7 +423,7 @@ export default function RadarPage() {
         </div>
 
         <div className="mt-6 pt-4 border-t border-white/10 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>REAL-TIME PHYSICS SIMULATION</span>
+          <span>2D TOPOLOGY FORCE LAYOUT</span>
           <span className="text-emerald-400">60 FPS</span>
         </div>
       </div>

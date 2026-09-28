@@ -45,8 +45,9 @@ export class LightningRouter {
         return feeMsat;
 
       case 'fastest':
-        const hopLatencyPenalty = 5000; // equivalent to 5 sats per hop
-        return (edge.cltvExpiryDelta * 50) + hopLatencyPenalty + (feeMsat * 0.1);
+        // Hops and CLTV delay are the primary drivers of network latency
+        const hopLatencyPenalty = 100_000; // Prioritize fewer hops to reduce round-trip HTLC onion resolution
+        return (edge.cltvExpiryDelta * 100) + hopLatencyPenalty + (feeMsat * 0.001);
 
       case 'reliable':
         let riskPenalty = 0;

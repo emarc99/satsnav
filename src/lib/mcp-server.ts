@@ -13,6 +13,7 @@ import { buildLightningGraph } from './graph-builder';
 import { LightningRouter } from './router';
 import { FeeSentinel } from './sentinel';
 import { mempoolClient } from './mempool';
+import { satNavWallet } from './nwc';
 import { findKnownNode, KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RoutingStrategy } from '@/types/route';
 
@@ -93,6 +94,35 @@ export function createSatNavMCPServer(): Server {
                 description: 'Optional node alias or pubkey to evaluate for fee gouging.',
               },
             },
+            required: [],
+          },
+        },
+        {
+          name: 'pay_invoice_guarded',
+          description:
+            'Execute a BOLT-11 Lightning payment safely via Nostr Wallet Connect (NIP-47) with pre-flight fee limits and daily budget guardrails.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              invoice: {
+                type: 'string',
+                description: 'BOLT-11 Lightning invoice string (starts with lnbc...).',
+              },
+              max_fee_sats: {
+                type: 'number',
+                description: 'Optional maximum fee in satoshis willing to pay for routing.',
+              },
+            },
+            required: ['invoice'],
+          },
+        },
+        {
+          name: 'get_network_health',
+          description:
+            'Get real-time Lightning Network aggregate metrics including total capacity, active channels, and verified routing hubs.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
             required: [],
           },
         },
@@ -203,6 +233,70 @@ ${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.se
           { type: 'text', text: JSON.stringify({ distribution: dist, target_audit: targetGougeInfo }, null, 2) },
         ],
       };
+    }
+
+    if (name === 'pay_invoice_guarded') {
+      const invoice = String(args?.invoice || '');
+      const maxFeeSats = args?.max_fee_sats ? Number(args.max_fee_sats) : undefined;
+
+      if (!invoice) {
+        return {
+          content: [{ type: 'text', text: 'Error: invoice string is required.' }],
+          isError: true,
+        };
+      }
+
+      if (!satNavWallet.isConnected()) {
+        return {
+          content: [{ type: 'text', text: 'Error: NWC Wallet is not connected. Connect via SatNav Wallet UI or API first.' }],
+          isError: true,
+        };
+      }
+
+      const result = await satNavWallet.payInvoiceGuarded(invoice, maxFeeSats);
+
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Payment Blocked/Failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      const summary = `✅ Guarded Payment Successful!
+• Preimage: ${result.preimage}
+• Fee Paid: ${result.fee_paid_sats} sats
+• Payment Hash: ${result.payment_hash}`;
+
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+
+    if (name === 'get_network_health') {
+      try {
+        const stats = await mempoolClient.getStatistics();
+        const summary = `🌐 Lightning Network Health:
+• Total Capacity: ${(stats.total_capacity / 100_000_000).toFixed(2)} BTC
+• Active Channels: ${stats.channel_count.toLocaleString()}
+• Clearnet Nodes: ${stats.clearnet_nodes}
+• Tor Nodes: ${stats.tor_nodes}
+• Median Fee Rate: ${stats.med_fee_rate} ppm`;
+
+        return {
+          content: [
+            { type: 'text', text: summary },
+            { type: 'text', text: JSON.stringify(stats, null, 2) },
+          ],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: 'text', text: `Failed to fetch network stats: ${err.message}` }],
+          isError: true,
+        };
+      }
     }
 
     throw new Error(`Tool not found: ${name}`);

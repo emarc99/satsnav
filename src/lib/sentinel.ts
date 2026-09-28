@@ -1,7 +1,7 @@
 /**
  * SatNav Fee Sentinel & Network Risk Analyzer
  * Statistical distribution calculations, fee-gouging anomaly detection,
- * and channel balance depletion risk scoring.
+ * channel balance depletion risk scoring, and node reliability indexing.
  */
 
 export interface FeeDistribution {
@@ -30,9 +30,18 @@ export interface FeeGougeAlert {
 export interface CapacityRiskResult {
   riskLevel: 'safe' | 'moderate' | 'high' | 'critical';
   riskScore: number; // 0 to 100
-  ratio: number; // payment / capacity
-  depletionProbability: number; // 0.0 to 1.0
+  ratio: number;
+  depletionProbability: number;
   warningMessage?: string;
+}
+
+export interface NodeReliabilityIndex {
+  score: number; // 0 to 100
+  tier: 'Elite Router' | 'Core Hub' | 'Standard Node' | 'Edge Node';
+  channelCount: number;
+  capacityBtc: number;
+  nodeAgeDays: number;
+  stabilityFactors: string[];
 }
 
 export class FeeSentinel {
@@ -134,9 +143,6 @@ export class FeeSentinel {
     };
   }
 
-  /**
-   * Score channel depletion risk based on payment size vs total channel capacity
-   */
   static scoreCapacityRisk(
     paymentAmountSats: number,
     channelCapacitySats: number
@@ -187,6 +193,75 @@ export class FeeSentinel {
       riskScore: 10,
       ratio: Number(ratio.toFixed(4)),
       depletionProbability: 0.05,
+    };
+  }
+
+  /**
+   * Calculate node reliability index based on connectivity, capacity, and maturity
+   */
+  static calculateNodeReliability(node: {
+    active_channel_count?: number;
+    capacity?: number | string;
+    first_seen?: number;
+  }): NodeReliabilityIndex {
+    const channels = node.active_channel_count || 1;
+    const capacitySats = Number(node.capacity) || 10_000_000;
+    const capacityBtc = Number((capacitySats / 100_000_000).toFixed(2));
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const firstSeen = node.first_seen || (nowSeconds - 86400 * 30);
+    const nodeAgeDays = Math.max(1, Math.floor((nowSeconds - firstSeen) / 86400));
+
+    const stabilityFactors: string[] = [];
+    let score = 20; // Base score
+
+    // Channel connectivity weight (max 35 pts)
+    if (channels >= 500) {
+      score += 35;
+      stabilityFactors.push('Tier-1 Connectivity (500+ channels)');
+    } else if (channels >= 100) {
+      score += 25;
+      stabilityFactors.push('Strong Connectivity (100+ channels)');
+    } else if (channels >= 20) {
+      score += 15;
+    }
+
+    // Capacity depth weight (max 25 pts)
+    if (capacityBtc >= 100) {
+      score += 25;
+      stabilityFactors.push('Massive Liquidity Depth (100+ BTC)');
+    } else if (capacityBtc >= 10) {
+      score += 18;
+      stabilityFactors.push('Deep Liquidity (10+ BTC)');
+    } else if (capacityBtc >= 1) {
+      score += 10;
+    }
+
+    // Maturity age weight (max 20 pts)
+    if (nodeAgeDays >= 730) {
+      score += 20;
+      stabilityFactors.push('Battle-Tested Uptime (2+ years)');
+    } else if (nodeAgeDays >= 365) {
+      score += 15;
+      stabilityFactors.push('Mature Node (1+ year)');
+    } else if (nodeAgeDays >= 90) {
+      score += 10;
+    }
+
+    score = Math.min(100, Math.max(10, score));
+
+    let tier: NodeReliabilityIndex['tier'] = 'Edge Node';
+    if (score >= 85) tier = 'Elite Router';
+    else if (score >= 65) tier = 'Core Hub';
+    else if (score >= 40) tier = 'Standard Node';
+
+    return {
+      score,
+      tier,
+      channelCount: channels,
+      capacityBtc,
+      nodeAgeDays,
+      stabilityFactors,
     };
   }
 }

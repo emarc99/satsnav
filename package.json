@@ -1,0 +1,31 @@
+{
+  "name": "satnav",
+  "version": "0.1.0",
+  "description": "SatNav: Autonomous Lightning Routing & Liquidity Sentinel",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@getalby/sdk": "^8.0.3",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "lucide-react": "^1.48.0",
+    "next": "16.3.6",
+    "nostr-tools": "^2.25.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

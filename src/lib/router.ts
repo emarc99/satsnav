@@ -1,13 +1,14 @@
 /**
  * SatNav Lightning Pathfinding Router
  * Implements Dijkstra shortest path traversal for BOLT #7 directed graph
- * with multi-objective optimization (Cheapest, Fastest, Reliable, Balanced).
+ * with multi-objective optimization (Cheapest, Fastest, Reliable, Balanced)
+ * and route alternative generation.
  */
 
 import { LightningGraph, GraphEdge } from './graph';
 import { MinHeapPriorityQueue } from './priority-queue';
 import { Bolt7 } from './bolt7';
-import { RouteResult, RouteHop, RoutingStrategy } from '@/types/route';
+import { RouteResult, RouteHop, RouteAlternative, RoutingStrategy } from '@/types/route';
 
 interface PathPredecessor {
   fromNode: string;
@@ -41,19 +42,16 @@ export class LightningRouter {
 
     switch (strategy) {
       case 'cheapest':
-        // Pure fee minimization
         return feeMsat;
 
       case 'fastest':
-        // Minimize CLTV delta and hop penalties to reduce HTLC latency
         const hopLatencyPenalty = 5000; // equivalent to 5 sats per hop
         return (edge.cltvExpiryDelta * 50) + hopLatencyPenalty + (feeMsat * 0.1);
 
       case 'reliable':
-        // Heavily penalize channels near capacity limits
         let riskPenalty = 0;
         if (capacityRatio < 1.5) {
-          riskPenalty = 500000; // Almost disqualifying
+          riskPenalty = 500000;
         } else if (capacityRatio < 3) {
           riskPenalty = 50000;
         } else if (capacityRatio < 5) {
@@ -63,7 +61,6 @@ export class LightningRouter {
 
       case 'balanced':
       default:
-        // Balanced composite weight: 50% fee, 25% CLTV/hop, 25% capacity risk
         const balancedRisk = capacityRatio < 3 ? 20000 : 0;
         return (feeMsat * 0.6) + (edge.cltvExpiryDelta * 25) + balancedRisk;
     }
@@ -76,7 +73,8 @@ export class LightningRouter {
     sourcePubkey: string,
     targetPubkey: string,
     amountSats: number,
-    strategy: RoutingStrategy = 'cheapest'
+    strategy: RoutingStrategy = 'cheapest',
+    excludedEdgeIds: Set<string> = new Set()
   ): RouteResult {
     const startTime = performance.now();
     const amountMsat = Bolt7.satsToMsat(amountSats);
@@ -132,7 +130,7 @@ export class LightningRouter {
       const edges = this.graph.getOutgoingEdges(current);
 
       for (const edge of edges) {
-        if (edge.disabled) continue;
+        if (edge.disabled || excludedEdgeIds.has(edge.id)) continue;
 
         // Verify capacity is strictly adequate for this payment
         if (edge.capacitySats < amountSats) continue;
@@ -259,5 +257,34 @@ export class LightningRouter {
       execution_risk: reliabilityScore > 75 ? 'low' : reliabilityScore > 45 ? 'medium' : 'high',
       calculation_time_ms: calcTimeMs,
     };
+  }
+
+  /**
+   * Find alternative routes comparing strategies
+   */
+  findAlternatives(
+    sourcePubkey: string,
+    targetPubkey: string,
+    amountSats: number
+  ): RouteAlternative[] {
+    const strategies: RoutingStrategy[] = ['cheapest', 'fastest', 'reliable'];
+    const results: RouteAlternative[] = [];
+
+    for (const strat of strategies) {
+      const res = this.findRoute(sourcePubkey, targetPubkey, amountSats, strat);
+      if (res.success) {
+        let diff = '';
+        if (strat === 'cheapest') diff = 'Lowest total satoshi fee';
+        else if (strat === 'fastest') diff = `${res.hop_count} hops, lowest CLTV delay`;
+        else if (strat === 'reliable') diff = `${res.estimated_reliability_score}% estimated reliability`;
+
+        results.push({
+          route: res,
+          difference_summary: diff,
+        });
+      }
+    }
+
+    return results;
   }
 }

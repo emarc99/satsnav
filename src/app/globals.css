@@ -1,26 +1,130 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* High-Contrast Cypherpunk Design Tokens */
+  --bg-primary: #06080D;
+  --bg-secondary: #0D111A;
+  --bg-card: rgba(13, 17, 26, 0.75);
+  --bg-card-hover: rgba(22, 29, 44, 0.85);
+  
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-glass-strong: rgba(255, 255, 255, 0.16);
+  --border-glow: rgba(247, 147, 26, 0.35);
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  /* Colour-Popping Vivid Accents */
+  --accent-bitcoin: #F7931A;
+  --accent-bitcoin-glow: rgba(247, 147, 26, 0.35);
+  
+  --accent-cyan: #00F2FE;
+  --accent-cyan-glow: rgba(0, 242, 254, 0.35);
+  
+  --accent-green: #10B981;
+  --accent-green-glow: rgba(16, 185, 129, 0.35);
+
+  --accent-red: #FF3366;
+  --accent-red-glow: rgba(255, 51, 102, 0.35);
+
+  --accent-purple: #8B5CF6;
+  --accent-purple-glow: rgba(139, 92, 246, 0.35);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  color-scheme: dark;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Background grid effect */
+.bg-cypher-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+/* Subtle ambient radial glows */
+.radial-glow-bitcoin {
+  background: radial-gradient(circle at 50% 0%, rgba(247, 147, 26, 0.15) 0%, transparent 65%);
+}
+
+.radial-glow-cyan {
+  background: radial-gradient(circle at 100% 50%, rgba(0, 242, 254, 0.12) 0%, transparent 55%);
+}
+
+/* Glassmorphism Card Utilities */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-glass-strong);
+}
+
+.glass-panel-glow {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(247, 147, 26, 0.3);
+  box-shadow: 0 0 25px rgba(247, 147, 26, 0.15);
+}
+
+/* Text glow utilities */
+.text-glow-bitcoin {
+  text-shadow: 0 0 16px rgba(247, 147, 26, 0.5);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 16px rgba(0, 242, 254, 0.5);
+}
+
+.text-glow-green {
+  text-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+}
+
+.text-glow-red {
+  text-shadow: 0 0 16px rgba(255, 51, 102, 0.5);
+}
+
+/* Pulse animation for live status */
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 12px currentColor; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.live-pulse {
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 147, 26, 0.5);
 }

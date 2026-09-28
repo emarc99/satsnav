@@ -12,22 +12,23 @@ export function NetworkTicker() {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
-          setStats(data.data);
+          const raw = data.data.latest || data.data;
+          setStats(raw);
         }
       })
       .catch((err) => console.warn('Ticker stats fetch error:', err))
       .finally(() => setLoading(false));
   }, []);
 
-  const capacityBtc = stats
-    ? (stats.total_capacity / 100_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })
-    : '4,850+';
+  const capacityBtc = stats?.total_capacity != null
+    ? (Number(stats.total_capacity) / 100_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })
+    : '3,753+';
 
-  const channels = stats ? stats.channel_count.toLocaleString() : '36,400+';
-  const medianFee = stats ? `${stats.med_fee_rate} ppm` : '250 ppm';
-  const torRatio = stats
+  const channels = stats?.channel_count != null ? stats.channel_count.toLocaleString() : '32,500+';
+  const medianFee = stats?.med_fee_rate != null ? `${stats.med_fee_rate} ppm` : '100 ppm';
+  const torRatio = (stats?.tor_nodes != null && stats?.clearnet_nodes != null)
     ? `${Math.round((stats.tor_nodes / (stats.clearnet_nodes + stats.tor_nodes || 1)) * 100)}%`
-    : '68%';
+    : '63%';
 
   return (
     <div className="w-full bg-[#090D15] border-b border-white/5 py-2 px-4 text-xs font-mono">

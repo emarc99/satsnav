@@ -1,6 +1,7 @@
 /**
  * SatNav Lightning Pathfinding Router
- * Implements Dijkstra shortest path traversal for BOLT #7 directed graph.
+ * Implements Dijkstra shortest path traversal for BOLT #7 directed graph
+ * with multi-objective optimization (Cheapest, Fastest, Reliable, Balanced).
  */
 
 import { LightningGraph, GraphEdge } from './graph';
@@ -19,6 +20,53 @@ export class LightningRouter {
 
   constructor(graph: LightningGraph) {
     this.graph = graph;
+  }
+
+  /**
+   * Calculate edge cost based on the chosen optimization strategy
+   */
+  private computeEdgeWeight(
+    edge: GraphEdge,
+    amountSats: number,
+    amountMsat: number,
+    strategy: RoutingStrategy
+  ): number {
+    const feeMsat = Bolt7.calculateHopFee(
+      amountMsat,
+      edge.feeBaseMsat,
+      edge.feeProportionalMillionths
+    );
+
+    const capacityRatio = edge.capacitySats / amountSats;
+
+    switch (strategy) {
+      case 'cheapest':
+        // Pure fee minimization
+        return feeMsat;
+
+      case 'fastest':
+        // Minimize CLTV delta and hop penalties to reduce HTLC latency
+        const hopLatencyPenalty = 5000; // equivalent to 5 sats per hop
+        return (edge.cltvExpiryDelta * 50) + hopLatencyPenalty + (feeMsat * 0.1);
+
+      case 'reliable':
+        // Heavily penalize channels near capacity limits
+        let riskPenalty = 0;
+        if (capacityRatio < 1.5) {
+          riskPenalty = 500000; // Almost disqualifying
+        } else if (capacityRatio < 3) {
+          riskPenalty = 50000;
+        } else if (capacityRatio < 5) {
+          riskPenalty = 10000;
+        }
+        return feeMsat + riskPenalty;
+
+      case 'balanced':
+      default:
+        // Balanced composite weight: 50% fee, 25% CLTV/hop, 25% capacity risk
+        const balancedRisk = capacityRatio < 3 ? 20000 : 0;
+        return (feeMsat * 0.6) + (edge.cltvExpiryDelta * 25) + balancedRisk;
+    }
   }
 
   /**
@@ -86,17 +134,10 @@ export class LightningRouter {
       for (const edge of edges) {
         if (edge.disabled) continue;
 
-        // Verify capacity is adequate for this payment
+        // Verify capacity is strictly adequate for this payment
         if (edge.capacitySats < amountSats) continue;
 
-        // Compute edge weight
-        const edgeFeeMsat = Bolt7.calculateHopFee(
-          amountMsat,
-          edge.feeBaseMsat,
-          edge.feeProportionalMillionths
-        );
-
-        const edgeWeight = edgeFeeMsat;
+        const edgeWeight = this.computeEdgeWeight(edge, amountSats, amountMsat, strategy);
         const newDist = currentDist + edgeWeight;
 
         if (newDist < (distances.get(edge.target) ?? Infinity)) {
@@ -167,7 +208,7 @@ export class LightningRouter {
       cumulativeFeeMsat += hopFeeMsat;
       cumulativeCltvDelta += edge.cltvExpiryDelta;
 
-      // Risk score: Higher if capacity is barely larger than payment amount
+      // Risk score evaluation
       const capacityRatio = edge.capacitySats / amountSats;
       const riskScore = capacityRatio < 2 ? 85 : capacityRatio < 5 ? 45 : 10;
       const warnings: string[] = [];

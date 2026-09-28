@@ -76,16 +76,17 @@ export class SatNavWalletService {
     const balanceMsat = Number(balanceResponse.balance) || 0;
     const balanceSats = Math.floor(balanceMsat / 1000);
 
+    const resAny = balanceResponse as any;
     let maxAmountSats: number | undefined;
-    if (balanceResponse.max_amount) {
-      maxAmountSats = Math.floor(Number(balanceResponse.max_amount) / 1000);
+    if (resAny.max_amount) {
+      maxAmountSats = Math.floor(Number(resAny.max_amount) / 1000);
     }
 
     return {
       balance_sats: balanceSats,
       balance_msat: balanceMsat,
       max_amount_sats: maxAmountSats,
-      budget_renewal: balanceResponse.budget_renewal,
+      budget_renewal: resAny.budget_renewal,
     };
   }
 

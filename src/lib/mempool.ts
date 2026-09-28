@@ -106,26 +106,9 @@ export class MempoolClient {
    * Fetch global Lightning Network aggregate statistics
    */
   async getStatistics(): Promise<LightningNetworkStatistics> {
-    try {
-      const raw = await this.fetchWithTimeout<any>('/statistics/latest');
-      const stats = raw?.latest || raw;
-      return stats as LightningNetworkStatistics;
-    } catch (err) {
-      // Resilient fallback with authentic mainnet metrics if upstream times out
-      return {
-        channel_count: 32518,
-        total_capacity: 375379668018,
-        tor_nodes: 7980,
-        clearnet_nodes: 4599,
-        unannounced_nodes: 2018,
-        avg_capacity: 11543750,
-        avg_fee_rate: 823,
-        med_fee_rate: 100,
-        avg_base_fee_mtokens: 904,
-        med_base_fee_mtokens: 500,
-        clearnet_tor_nodes: 1633,
-      };
-    }
+    const raw = await this.fetchWithTimeout<any>('/statistics/latest');
+    const stats = raw?.latest || raw;
+    return stats as LightningNetworkStatistics;
   }
 }
 

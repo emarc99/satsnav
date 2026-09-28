@@ -278,14 +278,17 @@ ${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.se
     if (name === 'get_network_health') {
       try {
         const stats = await mempoolClient.getStatistics();
-        const capBtc = stats?.total_capacity ? (stats.total_capacity / 100_000_000).toFixed(2) : '3,753';
-        const channels = stats?.channel_count ? stats.channel_count.toLocaleString() : '32,500';
-        const summary = `🌐 Lightning Network Health:
+        if (!stats) {
+          throw new Error('Mempool API did not return network statistics.');
+        }
+        const capBtc = (Number(stats.total_capacity) / 100_000_000).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const channels = Number(stats.channel_count).toLocaleString();
+        const summary = `🌐 Lightning Network Health (Live Mainnet):
 • Total Capacity: ${capBtc} BTC
 • Active Channels: ${channels}
-• Clearnet Nodes: ${stats?.clearnet_nodes || 4599}
-• Tor Nodes: ${stats?.tor_nodes || 7980}
-• Median Fee Rate: ${stats?.med_fee_rate || 100} ppm`;
+• Clearnet Nodes: ${stats.clearnet_nodes != null ? Number(stats.clearnet_nodes).toLocaleString() : 'N/A'}
+• Tor Nodes: ${stats.tor_nodes != null ? Number(stats.tor_nodes).toLocaleString() : 'N/A'}
+• Median Fee Rate: ${stats.med_fee_rate != null ? stats.med_fee_rate + ' ppm' : 'N/A'}`;
 
         return {
           content: [
@@ -295,7 +298,7 @@ ${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.se
         };
       } catch (err: any) {
         return {
-          content: [{ type: 'text', text: `Failed to fetch network stats: ${err.message}` }],
+          content: [{ type: 'text', text: `Failed to fetch live network stats: ${err.message}` }],
           isError: true,
         };
       }

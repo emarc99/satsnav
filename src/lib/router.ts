@@ -30,9 +30,11 @@ export class LightningRouter {
     edge: GraphEdge,
     amountSats: number,
     amountMsat: number,
-    strategy: RoutingStrategy
+    strategy: RoutingStrategy,
+    isSourceEgress: boolean = false
   ): number {
-    const feeMsat = Bolt7.calculateHopFee(
+    // Hop 0 egress from the origin node carries 0 forwarding fee
+    const feeMsat = isSourceEgress ? 0 : Bolt7.calculateHopFee(
       amountMsat,
       edge.feeBaseMsat,
       edge.feeProportionalMillionths
@@ -129,6 +131,7 @@ export class LightningRouter {
 
       const currentDist = distances.get(current) ?? Infinity;
       const edges = this.graph.getOutgoingEdges(current);
+      const isSourceEgress = (current === sourcePubkey);
 
       for (const edge of edges) {
         if (edge.disabled || excludedEdgeIds.has(edge.id)) continue;
@@ -136,7 +139,7 @@ export class LightningRouter {
         // Verify capacity is strictly adequate for this payment
         if (edge.capacitySats < amountSats) continue;
 
-        const edgeWeight = this.computeEdgeWeight(edge, amountSats, amountMsat, strategy);
+        const edgeWeight = this.computeEdgeWeight(edge, amountSats, amountMsat, strategy, isSourceEgress);
         const newDist = currentDist + edgeWeight;
 
         if (newDist < (distances.get(edge.target) ?? Infinity)) {
@@ -176,7 +179,7 @@ export class LightningRouter {
       };
     }
 
-    // Reconstruct path backward
+    // Reconstruct path backward from target to source
     const traversedEdges: GraphEdge[] = [];
     let curr = targetPubkey;
 
@@ -187,34 +190,38 @@ export class LightningRouter {
       curr = pred.fromNode;
     }
 
-    // Compute hop flows
-    const hops: RouteHop[] = [];
-    let cumulativeFeeMsat = 0;
-    let cumulativeCltvDelta = 0;
+    // Compute backward hop flows per BOLT #4 & BOLT #7
+    // Amounts are calculated from destination back to origin so each node covers downstream fees
+    const hops: RouteHop[] = new Array(traversedEdges.length);
+    let currentAmountMsat = amountMsat;
+    let totalFeeMsat = 0;
+    let totalCltvDelta = 0;
 
-    for (let i = 0; i < traversedEdges.length; i++) {
+    for (let i = traversedEdges.length - 1; i >= 0; i--) {
       const edge = traversedEdges[i];
       const fromNode = this.graph.getNode(edge.source);
       const toNode = this.graph.getNode(edge.target);
 
-      const hopFeeMsat = Bolt7.calculateHopFee(
-        amountMsat,
+      // Hop 0 (source node egress) carries 0 routing fee to sender
+      const isHopZero = (i === 0);
+      const hopFeeMsat = isHopZero ? 0 : Bolt7.calculateHopFee(
+        currentAmountMsat,
         edge.feeBaseMsat,
         edge.feeProportionalMillionths
       );
       const hopFeeSats = Bolt7.msatToSats(hopFeeMsat);
 
-      cumulativeFeeMsat += hopFeeMsat;
-      cumulativeCltvDelta += edge.cltvExpiryDelta;
+      totalFeeMsat += hopFeeMsat;
+      totalCltvDelta += edge.cltvExpiryDelta;
 
       // Risk score evaluation
       const capacityRatio = edge.capacitySats / amountSats;
       const riskScore = capacityRatio < 2 ? 85 : capacityRatio < 5 ? 45 : 10;
       const warnings: string[] = [];
       if (capacityRatio < 2) warnings.push('Tight channel capacity: high failure risk');
-      if (edge.feeProportionalMillionths > 1000) warnings.push('Elevated ppm fee rate (>1000 ppm)');
+      if (!isHopZero && edge.feeProportionalMillionths > 1000) warnings.push('Elevated ppm fee rate (>1000 ppm)');
 
-      hops.push({
+      hops[i] = {
         hop_index: i + 1,
         from_node_pubkey: edge.source,
         from_node_alias: fromNode?.alias || edge.source.substring(0, 10),
@@ -222,20 +229,23 @@ export class LightningRouter {
         to_node_alias: toNode?.alias || edge.target.substring(0, 10),
         channel_id: edge.id,
         channel_capacity_sats: edge.capacitySats,
-        fee_base_msat: edge.feeBaseMsat,
-        fee_proportional_millionths: edge.feeProportionalMillionths,
+        fee_base_msat: isHopZero ? 0 : edge.feeBaseMsat,
+        fee_proportional_millionths: isHopZero ? 0 : edge.feeProportionalMillionths,
         fee_msat: hopFeeMsat,
         fee_sats: hopFeeSats,
         cltv_expiry_delta: edge.cltvExpiryDelta,
-        outgoing_amount_msat: amountMsat + cumulativeFeeMsat,
-        outgoing_amount_sats: amountSats + Bolt7.msatToSats(cumulativeFeeMsat),
+        outgoing_amount_msat: currentAmountMsat,
+        outgoing_amount_sats: Bolt7.msatToSats(currentAmountMsat),
         risk_score: riskScore,
         warnings,
-      });
+      };
+
+      // Previous hop must forward enough to cover current amount + intermediary fee
+      currentAmountMsat += hopFeeMsat;
     }
 
-    const totalFeeSats = Bolt7.msatToSats(cumulativeFeeMsat);
-    const feePercentage = Bolt7.feePercentage(cumulativeFeeMsat, amountMsat);
+    const totalFeeSats = Bolt7.msatToSats(totalFeeMsat);
+    const feePercentage = Bolt7.feePercentage(totalFeeMsat, amountMsat);
     const avgRisk = hops.reduce((acc, h) => acc + h.risk_score, 0) / (hops.length || 1);
     const reliabilityScore = Math.max(10, Math.min(100, Math.round(100 - avgRisk)));
 
@@ -247,10 +257,10 @@ export class LightningRouter {
       target_alias: targetAlias,
       amount_sats: amountSats,
       amount_msat: amountMsat,
-      total_fee_msat: cumulativeFeeMsat,
+      total_fee_msat: totalFeeMsat,
       total_fee_sats: totalFeeSats,
       fee_percentage: feePercentage,
-      total_cltv_delta: cumulativeCltvDelta,
+      total_cltv_delta: totalCltvDelta,
       hop_count: hops.length,
       hops,
       strategy,

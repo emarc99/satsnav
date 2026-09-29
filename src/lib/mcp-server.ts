@@ -14,6 +14,7 @@ import { LightningRouter } from './router';
 import { FeeSentinel } from './sentinel';
 import { mempoolClient } from './mempool';
 import { satNavWallet } from './nwc';
+import { nostrSentinel } from './nostr-sentinel';
 import { findKnownNode, KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RoutingStrategy } from '@/types/route';
 
@@ -124,6 +125,34 @@ export function createSatNavMCPServer(): Server {
             type: 'object',
             properties: {},
             required: [],
+          },
+        },
+        {
+          name: 'broadcast_nostr_threat_alert',
+          description:
+            'Cryptographically sign and broadcast a Lightning Network routing threat alert to public Nostr relays (NIP-01) to protect the decentralized AI agent swarm.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              node_pubkey: {
+                type: 'string',
+                description: 'Public key or alias of the predatory/flagged node.',
+              },
+              observed_ppm: {
+                type: 'number',
+                description: 'The excessive fee rate in ppm (parts per million) charged by the node.',
+              },
+              severity: {
+                type: 'string',
+                enum: ['predatory', 'severe', 'moderate'],
+                description: 'Severity level of the threat (predatory, severe, moderate).',
+              },
+              recommendation: {
+                type: 'string',
+                description: 'Actionable bypass advice for other routing agents.',
+              },
+            },
+            required: ['node_pubkey', 'observed_ppm'],
           },
         },
       ],
@@ -299,6 +328,46 @@ ${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.se
       } catch (err: any) {
         return {
           content: [{ type: 'text', text: `Failed to fetch live network stats: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+
+    if (name === 'broadcast_nostr_threat_alert') {
+      try {
+        const query = String(args?.node_pubkey || '');
+        const pubkey = resolveNodeKey(query);
+        const ppm = Number(args?.observed_ppm || 0);
+        const severity = (args?.severity as any) || 'predatory';
+        const recommendation = args?.recommendation
+          ? String(args.recommendation)
+          : `Predatory fee rate (${ppm} ppm) detected on ${query}. Choose alternative low-fee path.`;
+
+        const alertRecord = await nostrSentinel.broadcastThreatAlert({
+          nodePubkey: pubkey,
+          alias: query,
+          ppm,
+          medianPpm: 100,
+          multiplierVsMedian: Number((ppm / 100).toFixed(1)),
+          severity,
+          recommendation,
+        });
+
+        const summary = `📡 Nostr Threat Alert Broadcasted (NIP-01):
+• Event ID: ${alertRecord.id}
+• Author npub: ${alertRecord.npub}
+• Relays: ${alertRecord.relays.join(', ')}
+• Status: ${alertRecord.status.toUpperCase()}`;
+
+        return {
+          content: [
+            { type: 'text', text: summary },
+            { type: 'text', text: JSON.stringify(alertRecord, null, 2) },
+          ],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: 'text', text: `Failed to broadcast Nostr alert: ${err.message}` }],
           isError: true,
         };
       }

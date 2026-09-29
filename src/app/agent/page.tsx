@@ -65,6 +65,22 @@ const MCP_TOOLS = [
     description: 'Get real-time Lightning Network aggregate capacity, channels, and stats.',
     defaultParams: JSON.stringify({}, null, 2),
   },
+  {
+    id: 'broadcast_nostr_threat_alert',
+    label: 'broadcast_nostr_threat_alert',
+    icon: Radio,
+    description: 'Cryptographically sign and broadcast a predatory fee threat alert to public Nostr relays (NIP-01).',
+    defaultParams: JSON.stringify(
+      {
+        node_pubkey: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f',
+        observed_ppm: 8500,
+        severity: 'predatory',
+        recommendation: 'Predatory fee spike detected. Automatically rerouting via low-cost alternative path.',
+      },
+      null,
+      2
+    ),
+  },
 ];
 
 export default function AgentPage() {

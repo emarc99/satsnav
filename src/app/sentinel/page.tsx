@@ -11,9 +11,15 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
-  BarChart3
+  BarChart3,
+  Sliders,
+  Radio,
+  ArrowRight,
+  Flame,
+  Globe
 } from 'lucide-react';
 import { FeeDistribution } from '@/lib/sentinel';
+import { KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 
 export default function SentinelPage() {
   const [distribution, setDistribution] = useState<FeeDistribution | null>(null);
@@ -21,7 +27,15 @@ export default function SentinelPage() {
   const [anomalousChannels, setAnomalousChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  // Adversarial Simulation State
+  const [targetNode, setTargetNode] = useState(KNOWN_MAJOR_HUBS[0].pubkey);
+  const [simulatedPpm, setSimulatedPpm] = useState(4800);
+  const [broadcastingNostr, setBroadcastingNostr] = useState(false);
+  const [nostrSuccessMessage, setNostrSuccessMessage] = useState('');
+  const [nostrIdentity, setNostrIdentity] = useState<any>(null);
+  const [nostrAlerts, setNostrAlerts] = useState<any[]>([]);
+
+  const fetchSentinelData = () => {
     fetch('/api/sentinel')
       .then((res) => res.json())
       .then((data) => {
@@ -33,7 +47,85 @@ export default function SentinelPage() {
       })
       .catch((err) => console.error('Failed to load sentinel data:', err))
       .finally(() => setLoading(false));
+
+    fetch('/api/sentinel/nostr')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setNostrIdentity(data.identity);
+          setNostrAlerts(data.recentAlerts || []);
+        }
+      })
+      .catch((err) => console.warn('Failed to load Nostr identity:', err));
+  };
+
+  useEffect(() => {
+    fetchSentinelData();
   }, []);
+
+  // Compute live threat evaluation for sandbox
+  const median = distribution?.p50MedianPpm || 100;
+  const p90 = distribution?.p90Ppm || 850;
+  const multiplier = Number((simulatedPpm / Math.max(1, median)).toFixed(1));
+
+  let simSeverity: 'none' | 'moderate' | 'severe' | 'predatory' = 'none';
+  let simVerdict = 'APPROVED_SAFE';
+  let simColor = 'text-emerald-400';
+  let simBorder = 'border-emerald-500/30';
+  let simBg = 'bg-emerald-500/10';
+
+  if (simulatedPpm >= p90 * 2.5 || multiplier >= 8.0) {
+    simSeverity = 'predatory';
+    simVerdict = 'CRITICAL: PREDATORY FEE GOUGE';
+    simColor = 'text-[#FF3366]';
+    simBorder = 'border-[#FF3366]/40';
+    simBg = 'bg-[#FF3366]/10';
+  } else if (simulatedPpm >= p90 || multiplier >= 3.5) {
+    simSeverity = 'severe';
+    simVerdict = 'WARNING: SEVERE FEE ELEVATION';
+    simColor = 'text-[#FF8A00]';
+    simBorder = 'border-[#FF8A00]/40';
+    simBg = 'bg-[#FF8A00]/10';
+  } else if (multiplier >= 2.0) {
+    simSeverity = 'moderate';
+    simVerdict = 'CAUTION: MODERATE SURCHARGE';
+    simColor = 'text-yellow-400';
+    simBorder = 'border-yellow-500/40';
+    simBg = 'bg-yellow-500/10';
+  }
+
+  const selectedNodeObj = KNOWN_MAJOR_HUBS.find((h) => h.pubkey === targetNode) || KNOWN_MAJOR_HUBS[0];
+
+  const handleBroadcastNostr = async () => {
+    setBroadcastingNostr(true);
+    setNostrSuccessMessage('');
+
+    try {
+      const res = await fetch('/api/sentinel/nostr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodePubkey: selectedNodeObj.pubkey,
+          alias: selectedNodeObj.alias,
+          ppm: simulatedPpm,
+          medianPpm: median,
+          multiplierVsMedian: multiplier,
+          severity: simSeverity === 'none' ? 'moderate' : simSeverity,
+          recommendation: `High fee alert: ${selectedNodeObj.alias} observed charging ${simulatedPpm} ppm (${multiplier}x median). Automated agent reroute recommended.`,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.event) {
+        setNostrSuccessMessage(`Broadcasted to Nostr Relays! Event ID: ${data.event.id.slice(0, 16)}...`);
+        setNostrAlerts((prev) => [data.event, ...prev.slice(0, 19)]);
+      }
+    } catch (err: any) {
+      console.error('Nostr broadcast error:', err);
+    } finally {
+      setBroadcastingNostr(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#06080D] bg-cypher-grid py-10 px-4 sm:px-6 lg:px-8 font-mono">
@@ -47,7 +139,7 @@ export default function SentinelPage() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Fee Gouge Sentinel</h1>
             <p className="text-xs text-slate-400 mt-1">
-              Continuously audits network fee percentiles to protect autonomous agents from predatory routing traps.
+              Continuously audits live mainnet percentiles to protect autonomous AI agents from predatory routing traps.
             </p>
           </div>
 
@@ -95,6 +187,173 @@ export default function SentinelPage() {
             </div>
           </div>
         )}
+
+        {/* Adversarial Attack Vector Sandbox */}
+        <div className="mt-8 glass-panel rounded-2xl p-6 border border-[#FF3366]/30 shadow-[0_0_30px_rgba(255,51,102,0.1)]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#FF3366]/20 border border-[#FF3366]/40 flex items-center justify-center text-[#FF3366]">
+                <Flame className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white tracking-wider uppercase">
+                  ADVERSARIAL ATTACK SIMULATION SANDBOX
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Simulate an intermediary node jacking fees up to predatory rates to observe Sentinel threat detection &amp; Nostr broadcasts.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded bg-[#FF3366]/10 text-[#FF3366] text-[10px] font-bold border border-[#FF3366]/30">
+              LIVE TESTBED
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {/* Target Node Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-2">
+                TARGET ROUTING HUB UNDER ATTACK
+              </label>
+              <select
+                value={targetNode}
+                onChange={(e) => setTargetNode(e.target.value)}
+                className="w-full bg-[#0D111A] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF3366]"
+              >
+                {KNOWN_MAJOR_HUBS.map((hub) => (
+                  <option key={hub.pubkey} value={hub.pubkey}>
+                    {hub.alias} ({hub.category.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-2 truncate">
+                Pubkey: {selectedNodeObj.pubkey}
+              </p>
+            </div>
+
+            {/* Fee Spike Slider */}
+            <div>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <label className="font-semibold text-slate-400">SIMULATED FEE RATE</label>
+                <span className="text-[#F7931A] font-bold">{simulatedPpm.toLocaleString()} ppm</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="15000"
+                step="100"
+                value={simulatedPpm}
+                onChange={(e) => setSimulatedPpm(Number(e.target.value))}
+                className="w-full accent-[#FF3366] cursor-pointer"
+              />
+              <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                <span>100 ppm (Fair)</span>
+                <span>2,500 ppm (High)</span>
+                <span>15,000 ppm (Predatory)</span>
+              </div>
+            </div>
+
+            {/* Real-Time Sentinel Diagnosis */}
+            <div className={`p-4 rounded-xl border ${simBorder} ${simBg} flex flex-col justify-between`}>
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  SENTINEL DIAGNOSIS
+                </div>
+                <div className={`text-base font-extrabold mt-1 ${simColor}`}>
+                  {simVerdict}
+                </div>
+                <div className="text-xs text-slate-300 mt-1">
+                  Charged Fee is <span className="font-bold text-white">{multiplier}x</span> network median ({median} ppm).
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap gap-2">
+                <button
+                  onClick={handleBroadcastNostr}
+                  disabled={broadcastingNostr}
+                  className="flex-1 py-2 px-3 rounded-lg bg-[#FF3366] hover:bg-[#ff4d79] text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-[0_0_15px_rgba(255,51,102,0.3)]"
+                >
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>{broadcastingNostr ? 'SIGNING...' : 'BROADCAST TO NOSTR'}</span>
+                </button>
+
+                <Link
+                  href={`/router?target=${selectedNodeObj.pubkey}&strategy=cheapest`}
+                  className="py-2 px-3 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors flex items-center gap-1"
+                >
+                  <span>AUTONOMOUS BYPASS</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {nostrSuccessMessage && (
+            <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{nostrSuccessMessage}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Nostr Decentralized Threat Feed */}
+        <div className="mt-8 glass-panel rounded-2xl p-6 border border-white/10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[#00F2FE]" />
+              <h2 className="text-sm font-bold text-white tracking-wider uppercase">
+                DECENTRALIZED NOSTR THREAT INTELLIGENCE (NIP-01)
+              </h2>
+            </div>
+            {nostrIdentity && (
+              <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                <span className="text-slate-500">SENTINEL NPUB:</span>
+                <span className="text-[#00F2FE] select-all truncate max-w-xs">{nostrIdentity.npub}</span>
+              </div>
+            )}
+          </div>
+
+          {nostrAlerts.length > 0 ? (
+            <div className="space-y-3">
+              {nostrAlerts.map((alert, idx) => (
+                <div
+                  key={alert.id || idx}
+                  className="p-3.5 rounded-xl bg-[#090D15] border border-white/10 hover:border-white/20 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="px-2 py-0.5 rounded bg-[#FF3366]/20 text-[#FF3366] font-bold text-[10px] uppercase shrink-0 mt-0.5">
+                      NIP-01 BROADCAST
+                    </span>
+                    <div>
+                      <div className="text-white font-mono font-medium whitespace-pre-line text-[11px]">
+                        {alert.content}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-3">
+                        <span>Event ID: {alert.id?.slice(0, 16)}...</span>
+                        <span>•</span>
+                        <span>Relays: {alert.relays?.length || 3} connected</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`https://njump.me/${alert.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] flex items-center gap-1 shrink-0"
+                  >
+                    <span>View on Nostr</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-xl">
+              Use the Adversarial Sandbox above or trigger an MCP threat alert to broadcast signed threat telemetry to Nostr relays.
+            </div>
+          )}
+        </div>
 
         {/* Hub Reliability Index */}
         <div className="mt-8 glass-panel rounded-2xl p-6 border border-white/10">
@@ -160,7 +419,7 @@ export default function SentinelPage() {
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#FF3366]" />
               <h2 className="text-sm font-bold text-white tracking-wider uppercase">
-                FLAGGED FEE-GOUGING CHANNELS ({anomalousChannels.length})
+                FLAGGED MAINNET FEE ANOMALIES ({anomalousChannels.length})
               </h2>
             </div>
             <span className="text-[11px] text-slate-500">AUTO-AVOIDED BY 'CHEAPEST' ROUTER</span>

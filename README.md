@@ -75,20 +75,25 @@ graph TD
 SatsNav implements the Anthropic Model Context Protocol specification. Any AI agent (Claude Desktop, Cursor, Antigravity) can connect directly to SatsNav's tools:
 
 ### Available MCP Tools
-1. `find_optimal_route`: Returns lowest-fee, fastest, or most reliable path with hop breakdown.
+1. `find_optimal_route`: Returns lowest-fee, fastest, or most reliable path with exact hop breakdown.
 2. `probe_node_liquidity`: Returns node capacity, active channels, and reliability tier.
-3. `check_fee_sentinel`: Audits fee percentiles and flags fee gouging.
-4. `pay_invoice_guarded`: Executes safe payments via NWC with fee caps.
-5. `get_network_health`: Returns aggregate network capacity, channels, and stats.
+3. `check_fee_sentinel`: Audits fee percentiles (p50, p90, p99) and flags fee gouging.
+4. `pay_invoice_guarded`: Executes safe payments via NWC with fee caps and budget limits.
+5. `get_network_health`: Returns aggregate live network capacity, channels, and stats.
+6. `broadcast_nostr_threat_alert`: Cryptographically signs and broadcasts predatory fee alerts to public Nostr relays (NIP-01).
 
 ### Connecting to Claude Desktop / Cursor
 Add the following to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "satnav": {
-      "command": "node",
-      "args": ["bin/satnav-mcp.js"],
+    "satsnav": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tsx",
+        "scripts/mcp-runner.ts"
+      ],
       "env": {
         "NODE_ENV": "production"
       }
@@ -101,7 +106,19 @@ Or query the HTTP API directly at `/api/mcp` using standard JSON-RPC 2.0.
 
 ---
 
-## 5. Getting Started
+## 5. Sovereign Self-Hosting (Docker & Docker Compose)
+
+SatsNav includes production Docker packaging for sovereign node runners (Umbrel, Start9, RaspiBlitz, or private VPS):
+
+```bash
+# 1-Click build and start
+docker-compose up -d --build
+```
+The application will launch on `http://localhost:3000` with automated healthchecks on the live gossip ingestion pipeline.
+
+---
+
+## 6. Getting Started
 
 ### Prerequisites
 - Node.js 20+ (Node.js 24 recommended)
@@ -119,6 +136,11 @@ npm install
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Run Unit Tests
+```bash
+npm test
+```
 
 ### Type Check & Build
 ```bash

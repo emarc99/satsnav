@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "satsnav": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tsx",
+        "./scripts/mcp-runner.ts"
+      ],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

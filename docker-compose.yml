@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  satsnav:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: satsnav-sentinel
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # Optional: set a persistent 32-byte hex Nostr private key for the Sentinel
+      # - NOSTR_SENTINEL_PRIVATE_KEY=your_64_char_hex_private_key
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/mempool/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "app.satsnav.description=Autonomous Bitcoin Lightning Sentinel & MCP Co-Pilot"

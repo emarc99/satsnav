@@ -54,7 +54,7 @@ export async function buildLightningGraph(forceRefresh = false): Promise<Lightni
     }
 
     // 3. Connect top hubs with directed channel edges
-    // Inter-connect major hubs using typical BOLT #7 fee parameters
+    // Inter-connect major hubs using typical BOLT #7 fee parameters and realistic fee distribution
     const nodes = graph.getAllNodes();
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < Math.min(nodes.length, i + 8); j++) {
@@ -64,6 +64,24 @@ export async function buildLightningGraph(forceRefresh = false): Promise<Lightni
         const capacity = Math.min(u.capacitySats, v.capacitySats) * 0.15;
         const channelId = `${u.pubkey.substring(0, 8)}x${v.pubkey.substring(0, 8)}`;
 
+        // Deterministic fee rate generator mimicking real mainnet fee distribution
+        // Median ~180 ppm, elevated ~850 ppm, and ~7% adversarial predatory fee traps (5,000+ ppm)
+        const hashSeed0 = Math.abs((u.pubkey.charCodeAt(2) * 31 + v.pubkey.charCodeAt(3) * 17 + i * 7 + j) % 100);
+        let feePpm0 = 80 + (hashSeed0 * 3); // Default fair rate 80 - 380 ppm
+        if (hashSeed0 < 7) {
+          feePpm0 = 5000 + (hashSeed0 * 450); // Predatory fee trap (5,000 to 8,150 ppm)
+        } else if (hashSeed0 < 22) {
+          feePpm0 = 750 + (hashSeed0 * 35); // Elevated rate (750 to 1,500 ppm)
+        }
+
+        const hashSeed1 = Math.abs((v.pubkey.charCodeAt(2) * 31 + u.pubkey.charCodeAt(3) * 17 + j * 7 + i) % 100);
+        let feePpm1 = 80 + (hashSeed1 * 3);
+        if (hashSeed1 < 7) {
+          feePpm1 = 5000 + (hashSeed1 * 450);
+        } else if (hashSeed1 < 22) {
+          feePpm1 = 750 + (hashSeed1 * 35);
+        }
+
         // Direction U -> V
         graph.addEdge({
           id: `${channelId}:0`,
@@ -71,7 +89,7 @@ export async function buildLightningGraph(forceRefresh = false): Promise<Lightni
           target: v.pubkey,
           capacitySats: Math.floor(capacity),
           feeBaseMsat: 1000, // 1 sat base fee
-          feeProportionalMillionths: 250, // 250 ppm
+          feeProportionalMillionths: feePpm0,
           cltvExpiryDelta: 40,
           minHtlcMsat: 1000,
           maxHtlcMsat: Math.floor(capacity * 1000),
@@ -85,7 +103,7 @@ export async function buildLightningGraph(forceRefresh = false): Promise<Lightni
           target: u.pubkey,
           capacitySats: Math.floor(capacity),
           feeBaseMsat: 1000,
-          feeProportionalMillionths: 300, // 300 ppm
+          feeProportionalMillionths: feePpm1,
           cltvExpiryDelta: 40,
           minHtlcMsat: 1000,
           maxHtlcMsat: Math.floor(capacity * 1000),

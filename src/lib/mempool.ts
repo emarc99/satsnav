@@ -99,7 +99,20 @@ export class MempoolClient {
     if (!/^[0-9a-fA-F]{66}$/.test(pubkey)) {
       throw new Error(`Invalid node public key format: ${pubkey}`);
     }
-    return this.fetchWithTimeout<LightningChannel[]>(`/nodes/${pubkey}/channels`);
+    const rawChannels = await this.fetchWithTimeout<any[]>(`/channels?public_key=${pubkey}&status=active`);
+    if (!Array.isArray(rawChannels)) return [];
+
+    return rawChannels.map((c: any) => ({
+      id: String(c.id || c.short_id || ''),
+      short_channel_id: c.short_id,
+      capacity: Number(c.capacity) || 0,
+      node1_pub: pubkey,
+      node2_pub: c.node?.public_key || '',
+      fee_base_msat: 1000,
+      fee_proportional_millionths: Number(c.fee_rate) || 250,
+      cltv_expiry_delta: 40,
+      is_active: c.status === 1,
+    }));
   }
 
   /**

@@ -64,13 +64,15 @@ export class PaymentSafetyGuard {
       };
     }
 
-    // 4. Percentage fee limit
-    const feePercent = (estimatedFeeSats / (invoice.amount_sats || 1)) * 100;
-    if (feePercent > this.config.max_fee_percent) {
-      return {
-        safe: false,
-        reason: `Routing fee is ${feePercent.toFixed(2)}% of payment amount, exceeding maximum allowed threshold of ${this.config.max_fee_percent}%.`,
-      };
+    // 4. Percentage fee limit (evaluated when payment principal is known)
+    if (invoice.amount_sats > 0) {
+      const feePercent = (estimatedFeeSats / invoice.amount_sats) * 100;
+      if (feePercent > this.config.max_fee_percent) {
+        return {
+          safe: false,
+          reason: `Routing fee is ${feePercent.toFixed(2)}% of payment amount, exceeding maximum allowed threshold of ${this.config.max_fee_percent}%.`,
+        };
+      }
     }
 
     return { safe: true };

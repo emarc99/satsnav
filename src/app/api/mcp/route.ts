@@ -4,6 +4,7 @@ import { LightningRouter } from '@/lib/router';
 import { FeeSentinel } from '@/lib/sentinel';
 import { mempoolClient } from '@/lib/mempool';
 import { satNavWallet } from '@/lib/nwc';
+import { nostrSentinel } from '@/lib/nostr-sentinel';
 import { findKnownNode, KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RoutingStrategy } from '@/types/route';
 
@@ -58,6 +59,16 @@ export async function GET() {
           name: 'get_network_health',
           description: 'Get real-time Lightning Network aggregate capacity, channels, and stats.',
           parameters: {},
+        },
+        {
+          name: 'broadcast_nostr_threat_alert',
+          description: 'Cryptographically sign and broadcast a predatory fee threat alert to public Nostr relays (NIP-01) for AI swarms.',
+          parameters: {
+            node_pubkey: 'string',
+            observed_ppm: 'number',
+            severity: "'predatory' | 'severe' | 'moderate' (optional)",
+            recommendation: 'string (optional)',
+          },
         },
       ],
     },
@@ -166,6 +177,40 @@ export async function POST(request: NextRequest) {
             content: [
               { type: 'text', text: `Network Health: Capacity ${(stats.total_capacity / 1e8).toFixed(2)} BTC, Channels ${stats.channel_count}` },
               { type: 'text', text: JSON.stringify(stats, null, 2) },
+            ],
+          },
+        });
+      }
+
+      if (name === 'broadcast_nostr_threat_alert') {
+        const query = String(args?.node_pubkey || '');
+        const pubkey = resolveNodeKey(query);
+        const ppm = Number(args?.observed_ppm || 0);
+        const severity = (args?.severity as any) || 'predatory';
+        const recommendation = args?.recommendation
+          ? String(args.recommendation)
+          : `Predatory fee rate (${ppm} ppm) detected on ${query}. Choose alternative low-fee path.`;
+
+        const alertRecord = await nostrSentinel.broadcastThreatAlert({
+          nodePubkey: pubkey,
+          alias: query,
+          ppm,
+          medianPpm: 100,
+          multiplierVsMedian: Number((ppm / 100).toFixed(1)),
+          severity,
+          recommendation,
+        });
+
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: `📡 Nostr Threat Alert Broadcasted (NIP-01): Event ${alertRecord.id.substring(0, 16)}... published to ${alertRecord.relays.length} relays`,
+              },
+              { type: 'text', text: JSON.stringify(alertRecord, null, 2) },
             ],
           },
         });

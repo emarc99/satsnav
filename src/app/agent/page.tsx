@@ -131,9 +131,9 @@ export default function AgentPage() {
   const mcpConfigSnippet = JSON.stringify(
     {
       mcpServers: {
-        satnav: {
-          command: 'node',
-          args: ['bin/satnav-mcp.js'],
+        satsnav: {
+          command: 'npx',
+          args: ['-y', 'tsx', './scripts/mcp-runner.ts'],
           env: {
             NODE_ENV: 'production',
           },

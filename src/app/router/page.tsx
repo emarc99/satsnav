@@ -88,7 +88,7 @@ function RouterContent() {
           </div>
 
           <div className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400">
-            ENGINE: <span className="text-[#00F2FE] font-bold">DIJKSTRA + A* DUAL HEURISTIC</span>
+            ENGINE: <span className="text-[#00F2FE] font-bold">MULTI-OBJECTIVE DIJKSTRA (BOLT #7)</span>
           </div>
         </div>
 

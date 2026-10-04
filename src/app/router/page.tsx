@@ -11,20 +11,27 @@ import {
   ArrowRight, 
   AlertTriangle, 
   CheckCircle2, 
-  Info,
-  DollarSign,
-  ShieldAlert,
-  Radio,
-  Flame
+  Info, 
+  DollarSign, 
+  ShieldAlert, 
+  Radio, 
+  Flame,
+  ArrowLeftRight
 } from 'lucide-react';
 import { KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RouteResult, RoutingStrategy } from '@/types/route';
 
 function RouterContent() {
   const searchParams = useSearchParams();
-  const initialTarget = searchParams.get('target') || KNOWN_MAJOR_HUBS[2].pubkey; // Binance
+  const targetParam = searchParams.get('target');
 
-  const [source, setSource] = useState(KNOWN_MAJOR_HUBS[0].pubkey); // ACINQ
+  // Guard: if target param matches ACINQ, source defaults to bfx-lnd0 (Bitfinex), else ACINQ
+  const initialTarget = targetParam || KNOWN_MAJOR_HUBS[2].pubkey; // Binance
+  const initialSource = initialTarget === KNOWN_MAJOR_HUBS[0].pubkey 
+    ? KNOWN_MAJOR_HUBS[1].pubkey // bfx-lnd0 if target is ACINQ
+    : KNOWN_MAJOR_HUBS[0].pubkey; // ACINQ
+
+  const [source, setSource] = useState(initialSource);
   const [target, setTarget] = useState(initialTarget);
   const [amountSats, setAmountSats] = useState('25000');
   const [strategy, setStrategy] = useState<RoutingStrategy>('cheapest');
@@ -35,10 +42,23 @@ function RouterContent() {
   const [chaosMeta, setChaosMeta] = useState<any>(null);
   const [error, setError] = useState('');
 
-  const calculateRoute = async (strat = strategy, chaos = chaosMode) => {
+  const calculateRoute = async (
+    strat = strategy, 
+    chaos = chaosMode, 
+    src = source, 
+    dst = target
+  ) => {
     const amount = Number(amountSats);
     if (!amount || amount <= 0) {
       setError('Please specify a positive satoshi amount');
+      return;
+    }
+
+    if (src === dst) {
+      setError('Origin and Destination cannot be the same node. Please select different nodes to route across the Lightning Network.');
+      setRouteResult(null);
+      setAlternatives([]);
+      setChaosMeta(null);
       return;
     }
 
@@ -50,8 +70,8 @@ function RouterContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source,
-          target,
+          source: src,
+          target: dst,
           amount,
           strategy: strat,
           alternatives: true,
@@ -65,17 +85,51 @@ function RouterContent() {
         setAlternatives(data.alternatives || []);
         setChaosMeta(data.chaos_fuzzer || null);
       } else {
-        setError(data.error || 'Failed to find a viable route');
+        setError(data.error || data.route?.error || 'Failed to find a viable route');
+        setRouteResult(null);
+        setAlternatives([]);
+        setChaosMeta(null);
       }
     } catch (err: any) {
       setError(err.message || 'Routing calculation failed');
+      setRouteResult(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSourceChange = (newSource: string) => {
+    setSource(newSource);
+    if (newSource === target) {
+      const alt = KNOWN_MAJOR_HUBS.find(h => h.pubkey !== newSource)?.pubkey || KNOWN_MAJOR_HUBS[2].pubkey;
+      setTarget(alt);
+      calculateRoute(strategy, chaosMode, newSource, alt);
+      return;
+    }
+    calculateRoute(strategy, chaosMode, newSource, target);
+  };
+
+  const handleTargetChange = (newTarget: string) => {
+    setTarget(newTarget);
+    if (newTarget === source) {
+      const alt = KNOWN_MAJOR_HUBS.find(h => h.pubkey !== newTarget)?.pubkey || KNOWN_MAJOR_HUBS[0].pubkey;
+      setSource(alt);
+      calculateRoute(strategy, chaosMode, alt, newTarget);
+      return;
+    }
+    calculateRoute(strategy, chaosMode, source, newTarget);
+  };
+
+  const handleSwapNodes = () => {
+    const nextSource = target;
+    const nextTarget = source;
+    setSource(nextSource);
+    setTarget(nextTarget);
+    calculateRoute(strategy, chaosMode, nextSource, nextTarget);
+  };
+
   useEffect(() => {
-    calculateRoute();
+    calculateRoute(strategy, chaosMode, initialSource, initialTarget);
   }, []);
 
   return (
@@ -162,17 +216,24 @@ function RouterContent() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Source Node */}
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">
-                ORIGIN NODE (SOURCE)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-400">
+                  ORIGIN NODE (SOURCE)
+                </label>
+                <span className="text-[10px] text-slate-500 font-mono">STEP 0 EGRESS</span>
+              </div>
               <select
                 value={source}
-                onChange={(e) => setSource(e.target.value)}
+                onChange={(e) => handleSourceChange(e.target.value)}
                 className="w-full bg-[#0D111A] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#F7931A]"
               >
                 {KNOWN_MAJOR_HUBS.map((hub) => (
-                  <option key={hub.pubkey} value={hub.pubkey}>
-                    {hub.alias} ({hub.category.toUpperCase()})
+                  <option 
+                    key={hub.pubkey} 
+                    value={hub.pubkey}
+                    disabled={hub.pubkey === target}
+                  >
+                    {hub.alias} ({hub.category.toUpperCase()}){hub.pubkey === target ? ' — [DESTINATION]' : ''}
                   </option>
                 ))}
               </select>
@@ -180,17 +241,32 @@ function RouterContent() {
 
             {/* Target Node */}
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-2">
-                DESTINATION (TARGET)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-400">
+                  DESTINATION (TARGET)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSwapNodes}
+                  className="text-[10px] text-[#00F2FE] hover:text-[#3bf4ff] flex items-center gap-1 font-mono transition-colors font-semibold"
+                  title="Swap Origin and Destination"
+                >
+                  <ArrowLeftRight className="w-3 h-3" />
+                  <span>SWAP NODES</span>
+                </button>
+              </div>
               <select
                 value={target}
-                onChange={(e) => setTarget(e.target.value)}
+                onChange={(e) => handleTargetChange(e.target.value)}
                 className="w-full bg-[#0D111A] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00F2FE]"
               >
                 {KNOWN_MAJOR_HUBS.map((hub) => (
-                  <option key={hub.pubkey} value={hub.pubkey}>
-                    {hub.alias} ({hub.category.toUpperCase()})
+                  <option 
+                    key={hub.pubkey} 
+                    value={hub.pubkey}
+                    disabled={hub.pubkey === source}
+                  >
+                    {hub.alias} ({hub.category.toUpperCase()}){hub.pubkey === source ? ' — [ORIGIN]' : ''}
                   </option>
                 ))}
               </select>

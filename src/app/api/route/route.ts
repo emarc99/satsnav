@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: primaryRoute.success,
+      error: primaryRoute.success ? undefined : (primaryRoute.error || 'No routable path found with sufficient channel capacity'),
       timestamp: Date.now(),
       route: primaryRoute,
       alternatives: routeAlternatives,
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: route.success,
+      error: route.success ? undefined : (route.error || 'No routable path found with sufficient channel capacity'),
       timestamp: Date.now(),
       route,
       chaos_fuzzer: chaos_mode ? { active: true, spiked_ppm: 8500 } : null,

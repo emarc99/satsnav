@@ -1,107 +1,66 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
+import { useState } from 'react'
+import { Bot, Copy, Terminal, Check, Play, ArrowRight, Code } from 'lucide-react'
 import { 
-  Bot, 
-  Terminal, 
-  Play, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  Code, 
-  Cpu, 
-  Zap, 
-  Radio, 
-  ShieldAlert, 
-  Wallet 
-} from 'lucide-react';
+  AppShell, 
+  ConsoleLine, 
+  InfoTag, 
+  PageGrid, 
+  PageIntro, 
+  Panel, 
+  PanelTitle, 
+  Pill,
+  StatCard
+} from '@/components/app-shell'
 
 const MCP_TOOLS = [
-  {
-    id: 'find_optimal_route',
-    label: 'find_optimal_route',
-    icon: Zap,
-    description: 'Find lowest-fee, fastest, or most reliable path across Lightning Network using exact BOLT #7 calculations.',
-    defaultParams: JSON.stringify(
-      {
-        target_node: 'Binance',
-        amount_sats: 50000,
-        strategy: 'cheapest',
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'probe_node_liquidity',
-    label: 'probe_node_liquidity',
-    icon: Radio,
-    description: 'Inspect a Lightning node capacity, channels, reliability tier, and location.',
-    defaultParams: JSON.stringify(
-      {
-        node_pubkey_or_alias: 'ACINQ',
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'check_fee_sentinel',
-    label: 'check_fee_sentinel',
-    icon: ShieldAlert,
-    description: 'Audit network fee percentiles (median, p90, p99) and detect fee gouging.',
-    defaultParams: JSON.stringify(
-      {
-        target_node: 'bfx-lnd0',
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'get_network_health',
-    label: 'get_network_health',
-    icon: Cpu,
-    description: 'Get real-time Lightning Network aggregate capacity, channels, and stats.',
-    defaultParams: JSON.stringify({}, null, 2),
-  },
-  {
-    id: 'broadcast_nostr_threat_alert',
-    label: 'broadcast_nostr_threat_alert',
-    icon: Radio,
-    description: 'Cryptographically sign and broadcast a predatory fee threat alert to public Nostr relays (NIP-01).',
-    defaultParams: JSON.stringify(
-      {
-        node_pubkey: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f',
-        observed_ppm: 8500,
-        severity: 'predatory',
-        recommendation: 'Predatory fee spike detected. Automatically rerouting via low-cost alternative path.',
-      },
-      null,
-      2
-    ),
-  },
-];
+  { name: 'find_optimal_route', desc: 'Dijkstra route solver across BOLT #7 graph' },
+  { name: 'probe_node_liquidity', desc: 'Inspects capacity and channel health of a pubkey' },
+  { name: 'check_fee_sentinel', desc: 'Audits fee percentiles and flags fee gouges' },
+  { name: 'pay_invoice_guarded', desc: 'Pre-flight budget-enforced NWC payment dispatch' },
+  { name: 'get_network_health', desc: 'Returns aggregate live network topology statistics' },
+  { name: 'broadcast_nostr_threat_alert', desc: 'Signs & broadcasts Ed25519 threat advisories' },
+]
 
 export default function AgentPage() {
-  const [selectedTool, setSelectedTool] = useState(MCP_TOOLS[0]);
-  const [paramsInput, setParamsInput] = useState(MCP_TOOLS[0].defaultParams);
-  const [executionOutput, setExecutionOutput] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [copiedConfig, setCopiedConfig] = useState(false);
+  const [copied, setCopied] = useState(false)
+  const [activeTool, setActiveTool] = useState('find_optimal_route')
+  const [executing, setExecuting] = useState(false)
+  const [toolResponse, setToolResponse] = useState<any>(null)
 
-  const handleToolSelect = (tool: typeof MCP_TOOLS[0]) => {
-    setSelectedTool(tool);
-    setParamsInput(tool.defaultParams);
-    setExecutionOutput(null);
-  };
+  const mcpConfigJson = JSON.stringify({
+    mcpServers: {
+      satsnav: {
+        command: "npx",
+        args: ["-y", "tsx", "scripts/mcp-runner.ts"],
+        env: { NODE_ENV: "production" }
+      }
+    }
+  }, null, 2)
 
-  const handleExecute = async () => {
-    setLoading(true);
-    setExecutionOutput(null);
+  const copyConfig = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(mcpConfigJson)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const runTestQuery = async (toolName: string) => {
+    setExecuting(true)
+    setActiveTool(toolName)
 
     try {
-      const parsedArgs = JSON.parse(paramsInput);
+      let params: any = {}
+      if (toolName === 'find_optimal_route') {
+        params = { amount_sats: 25000, strategy: 'cheapest' }
+      } else if (toolName === 'check_fee_sentinel') {
+        params = { channel_id: '859002x999x1:0', fee_ppm: 8500 }
+      } else if (toolName === 'get_network_health') {
+        params = {}
+      }
+
       const res = await fetch('/api/mcp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,187 +69,127 @@ export default function AgentPage() {
           id: Date.now(),
           method: 'tools/call',
           params: {
-            name: selectedTool.id,
-            arguments: parsedArgs,
-          },
-        }),
-      });
+            name: toolName,
+            arguments: params
+          }
+        })
+      })
 
-      const data = await res.json();
-      setExecutionOutput(data);
+      const data = await res.json()
+      setToolResponse(data)
     } catch (err: any) {
-      setExecutionOutput({
-        jsonrpc: '2.0',
-        error: { code: -32603, message: err.message },
-      });
+      setToolResponse({ error: err.message })
     } finally {
-      setLoading(false);
+      setExecuting(false)
     }
-  };
-
-  const mcpConfigSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        satsnav: {
-          command: 'npx',
-          args: ['-y', 'tsx', './scripts/mcp-runner.ts'],
-          env: {
-            NODE_ENV: 'production',
-          },
-        },
-      },
-    },
-    null,
-    2
-  );
+  }
 
   return (
-    <div className="min-h-screen bg-[#06080D] bg-cypher-grid py-10 px-4 sm:px-6 lg:px-8 font-mono">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-8 border-b border-white/10">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00F2FE]/10 border border-[#00F2FE]/30 text-xs text-[#00F2FE] mb-2">
-              <Bot className="w-3.5 h-3.5" />
-              <span>ANTHROPIC MODEL CONTEXT PROTOCOL (MCP) RUNTIME</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Agent MCP Console</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Interact directly with SatNav tool primitives. Plug directly into Claude Desktop, Cursor, or autonomous LLMs.
-            </p>
-          </div>
-
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(mcpConfigSnippet);
-              setCopiedConfig(true);
-              setTimeout(() => setCopiedConfig(false), 2000);
-            }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-300 transition-colors"
+    <AppShell title="Agent console">
+      <PageIntro 
+        eyebrow="Model Context Protocol" 
+        title="Machine-native control, human-readable outcomes." 
+        description="Inspect the same route, fee, and threat tools your AI agent calls over stdio or HTTP JSON-RPC 2.0." 
+        action={
+          <button 
+            type="button"
+            onClick={copyConfig}
+            className="rounded-xl bg-[#171717] px-4 py-3 text-sm font-bold text-white hover:bg-black transition-transform hover:-translate-y-0.5 flex items-center shadow-sm"
           >
-            {copiedConfig ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-            <span>{copiedConfig ? 'CONFIG COPIED' : 'COPY MCP CONFIG'}</span>
+            {copied ? <Check className="mr-2 inline size-4 text-[#d7f76a]" /> : <Copy className="mr-2 inline size-4" />}
+            {copied ? 'Copied Claude Config!' : 'Copy MCP Config'}
           </button>
-        </div>
+        } 
+      />
 
-        {/* Console Workspace */}
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Tool Directory (Left Column) */}
-          <div className="lg:col-span-4 space-y-3">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-              AVAILABLE AGENT TOOLS ({MCP_TOOLS.length})
-            </h2>
+      <div className="grid gap-4 sm:grid-cols-3 mb-8">
+        <StatCard label="Protocol standard" value="MCP 1.0" detail="Anthropic JSON-RPC 2.0" accent />
+        <StatCard label="Tools registered" value="6 tools" detail="Pre-flight firewall suite" />
+        <StatCard label="Agent interfaces" value="Dual" detail="Stdio (CLI) + HTTP (/api/mcp)" />
+      </div>
 
-            {MCP_TOOLS.map((tool) => {
-              const Icon = tool.icon;
-              const isSelected = selectedTool.id === tool.id;
-              return (
-                <button
-                  key={tool.id}
-                  onClick={() => handleToolSelect(tool)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all ${
-                    isSelected
-                      ? 'bg-[#00F2FE]/10 border-[#00F2FE]/40 text-white shadow-[0_0_20px_rgba(0,242,254,0.15)]'
-                      : 'bg-[#090D15] border-white/10 hover:border-white/20 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold text-xs">
-                    <Icon className={`w-4 h-4 ${isSelected ? 'text-[#00F2FE]' : 'text-slate-500'}`} />
-                    <span>{tool.label}</span>
+      <PageGrid>
+        {/* Left Column: Tool Selector */}
+        <Panel className="lg:col-span-5">
+          <PanelTitle meta={<Pill tone="lime">6 tools online</Pill>}>
+            Available MCP tools
+          </PanelTitle>
+
+          <div className="flex flex-col gap-2.5">
+            {MCP_TOOLS.map((tool, i) => (
+              <div 
+                key={tool.name}
+                onClick={() => runTestQuery(tool.name)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                  activeTool === tool.name 
+                    ? 'border-[#171717] bg-[#171717] text-white shadow-sm' 
+                    : 'border-[#ecece5] bg-[#fafaf7] hover:border-[#deded5] text-[#171717]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`grid size-7 place-items-center rounded-lg text-xs font-bold ${
+                    activeTool === tool.name ? 'bg-[#d7f76a] text-[#171717]' : 'bg-[#eaf7c4] text-[#557c0d]'
+                  }`}>
+                    0{i + 1}
+                  </span>
+                  <div>
+                    <p className="font-mono text-xs font-bold">{tool.name}</p>
+                    <p className={`text-[11px] ${activeTool === tool.name ? 'text-[#aaa99f]' : 'text-[#88887f]'}`}>
+                      {tool.desc}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">
-                    {tool.description}
-                  </p>
-                </button>
-              );
-            })}
+                </div>
 
-            {/* MCP Spec Banner */}
-            <div className="p-4 rounded-xl glass-panel border border-white/10 text-xs mt-6">
-              <div className="flex items-center gap-2 text-[#F7931A] font-bold">
-                <Code className="w-4 h-4" />
-                <span>MCP SPEC COMPLIANT</span>
+                <Play className={`size-3.5 ${activeTool === tool.name ? 'text-[#d7f76a]' : 'text-[#9a9a90]'}`} />
               </div>
-              <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                Tools adhere to the JSON-RPC 2.0 schema and Anthropic Tool Calling protocols. Compatible with any autonomous agent runner.
-              </p>
-            </div>
+            ))}
           </div>
 
-          {/* Interactive Playground & Output (Right Column) */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Input Editor */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-[#F7931A]" />
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    TOOL PARAMETERS (JSON)
-                  </span>
-                </div>
-                <button
-                  onClick={handleExecute}
-                  disabled={loading}
-                  className="px-5 py-2 rounded-xl bg-[#F7931A] hover:bg-[#ff9f2c] text-black font-bold text-xs tracking-wider transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_0_20px_rgba(247,147,26,0.3)]"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{loading ? 'EXECUTING...' : 'DISPATCH TOOL CALL'}</span>
-                </button>
-              </div>
+          <div className="mt-5 p-4 rounded-xl bg-[#f7f7f2] border border-[#deded5] text-xs text-[#6c6c64]">
+            <p className="font-bold text-[#171717] mb-1">💡 Machine Money Tip</p>
+            Add SatsNav to Claude Desktop or Cursor to allow LLMs to audit route safety and check fee anomalies natively before dispatching satoshis.
+          </div>
+        </Panel>
 
-              <textarea
-                value={paramsInput}
-                onChange={(e) => setParamsInput(e.target.value)}
-                rows={6}
-                className="w-full bg-[#070A11] border border-white/15 rounded-xl p-4 text-xs font-mono text-emerald-400 focus:outline-none focus:border-[#F7931A] selection:bg-[#F7931A]/30"
-              />
-            </div>
+        {/* Right Column: Terminal Activity & Output */}
+        <Panel className="overflow-hidden bg-[#171717] text-white lg:col-span-7 flex flex-col justify-between">
+          <div>
+            <PanelTitle meta={
+              <span className="flex items-center gap-2 text-xs text-[#d7f76a]">
+                <span className="size-2 rounded-full bg-[#d7f76a]" />
+                JSON-RPC 2.0 stream
+              </span>
+            }>
+              <Terminal className="mr-2 inline size-4 text-[#d7f76a]" />
+              Agent activity console
+            </PanelTitle>
 
-            {/* Execution Output Inspector */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-[#00F2FE]" />
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    EXECUTION TERMINAL &amp; JSON-RPC 2.0 RESPONSE
-                  </span>
-                </div>
-                {executionOutput && (
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                      executionOutput.result?.isError || executionOutput.error
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-emerald-500/20 text-emerald-400'
-                    }`}
-                  >
-                    {executionOutput.result?.isError || executionOutput.error ? 'ERROR' : 'SUCCESS 200 OK'}
-                  </span>
-                )}
-              </div>
-
-              {executionOutput ? (
-                <div className="space-y-4">
-                  {/* Formatted Natural Language text block */}
-                  {executionOutput.result?.content?.[0]?.text && (
-                    <div className="p-4 rounded-xl bg-[#090D15] border border-white/10 text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
-                      {executionOutput.result.content[0].text}
-                    </div>
-                  )}
-
-                  {/* Raw JSON */}
-                  <pre className="p-4 rounded-xl bg-[#070A11] border border-white/10 text-[11px] text-slate-400 overflow-x-auto max-h-96">
-                    {JSON.stringify(executionOutput, null, 2)}
+            <div className="rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs max-h-96 overflow-y-auto">
+              <ConsoleLine time="10:42:01">⚡ find_optimal_route strategy=cheapest amount=25000</ConsoleLine>
+              <ConsoleLine time="10:42:01" tone="success">✓ route accepted: ACINQ → Kraken → Binance (5 sats fee)</ConsoleLine>
+              <ConsoleLine time="10:42:02">⚡ check_fee_sentinel scid=859002x999x1:0 ppm=8500</ConsoleLine>
+              <ConsoleLine time="10:42:02" tone="warn">! anomaly detected: 8,500 ppm fee gouge (action=quarantine)</ConsoleLine>
+              <ConsoleLine time="10:42:03" tone="success">✓ Nostr receipt broadcast: Schnorr signature verified</ConsoleLine>
+              
+              {toolResponse && (
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-[11px] text-[#d7f76a] font-bold mb-2">
+                    &gt; Live Execution Result ({activeTool}):
+                  </p>
+                  <pre className="text-[11px] text-slate-300 overflow-x-auto whitespace-pre-wrap bg-black/60 p-3 rounded-lg">
+                    {JSON.stringify(toolResponse, null, 2)}
                   </pre>
-                </div>
-              ) : (
-                <div className="p-12 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-xl">
-                  Select a tool and click "DISPATCH TOOL CALL" to inspect real-time agent output.
                 </div>
               )}
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  );
+
+          <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-[#aaa99f]">
+            <span className="font-mono">Endpoint: <span className="text-[#d7f76a]">/api/mcp</span></span>
+            <span className="font-mono">Protocol: <span className="text-white">stdio / HTTP</span></span>
+          </div>
+        </Panel>
+      </PageGrid>
+    </AppShell>
+  )
 }

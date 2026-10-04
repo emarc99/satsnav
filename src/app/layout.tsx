@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,13 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SatNav | Autonomous Lightning Routing & Liquidity Sentinel",
+  title: "SatsNav — Autonomous Pre-Flight Payment Firewall",
   description: "Real-time BOLT #7 pathfinding, fee anomaly detection, and Model Context Protocol (MCP) agent co-pilot for the Bitcoin Lightning Network.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.png",
+  },
 };
 
-import { Navbar } from "@/components/Navbar";
-import { NetworkTicker } from "@/components/NetworkTicker";
-import { Footer } from "@/components/Footer";
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: "#171717",
+};
 
 export default function RootLayout({
   children,
@@ -31,11 +36,8 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#06080D] text-slate-100 font-sans selection:bg-[#F7931A]/30 selection:text-[#F7931A]">
-        <Navbar />
-        <NetworkTicker />
-        <main className="flex-1">{children}</main>
-        <Footer />
+      <body className="min-h-full bg-[#f7f7f2] text-[#171717] font-sans selection:bg-[#d7f76a] selection:text-[#171717]">
+        {children}
       </body>
     </html>
   );

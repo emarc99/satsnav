@@ -67,8 +67,16 @@ export class LightningGraph {
     this.allEdges.push(edge);
   }
 
+  hasNode(pubkey: string): boolean {
+    return this.nodes.has(pubkey);
+  }
+
   getNode(pubkey: string): GraphNode | undefined {
     return this.nodes.get(pubkey);
+  }
+
+  getEdge(id: string): GraphEdge | undefined {
+    return this.allEdges.find((e) => e.id === id);
   }
 
   getOutgoingEdges(pubkey: string): GraphEdge[] {

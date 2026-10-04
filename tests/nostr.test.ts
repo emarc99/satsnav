@@ -38,6 +38,16 @@ describe('Nostr Threat Sentinel Suite (NIP-01)', () => {
     assert.strictEqual(hasPpmTag, true);
     assert.strictEqual(hasSeverityTag, true);
 
+    // Cryptographic verification & explorer receipts (Fix 3)
+    assert.strictEqual(alertRecord.verified, true, 'Event must pass Schnorr signature verification');
+    assert.ok(alertRecord.explorer_urls.nostr_band.includes(alertRecord.id));
+    assert.ok(alertRecord.explorer_urls.coracle.includes(alertRecord.id));
+    assert.ok(alertRecord.explorer_urls.primal.includes(alertRecord.id));
+
+    // Verify sovereign pre-seeded advisory exists
+    const recent = nostrSentinel.getRecentAlerts();
+    assert.ok(recent.length >= 2, 'Must contain pre-seeded and newly broadcasted advisories');
+
     nostrSentinel.close();
   });
 });

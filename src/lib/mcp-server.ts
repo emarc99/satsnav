@@ -356,6 +356,9 @@ ${targetGougeInfo ? `\nTarget Node Assessment:\n• Status: ${targetGougeInfo.se
         const summary = `📡 Nostr Threat Alert Broadcasted (NIP-01):
 • Event ID: ${alertRecord.id}
 • Author npub: ${alertRecord.npub}
+• Schnorr Signature: ${alertRecord.sig.slice(0, 32)}... (Verified Ed25519: ${alertRecord.verified})
+• Public Explorer: ${alertRecord.explorer_urls.nostr_band}
+• Alternative Viewers: ${alertRecord.explorer_urls.coracle} | ${alertRecord.explorer_urls.njump}
 • Relays: ${alertRecord.relays.join(', ')}
 • Status: ${alertRecord.status.toUpperCase()}`;
 

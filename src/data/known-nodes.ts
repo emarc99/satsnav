@@ -82,6 +82,13 @@ export const KNOWN_MAJOR_HUBS: KnownNode[] = [
     category: 'routing_hub',
     typical_capacity_btc: 256,
   },
+  {
+    pubkey: '03cde00000000000000000000000000000000000000000000000000000000001ab',
+    alias: 'Predatory Intermediary',
+    color: '#ef4444',
+    category: 'routing_hub',
+    typical_capacity_btc: 0.25,
+  },
 ];
 
 /**

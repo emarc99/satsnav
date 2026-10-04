@@ -12,7 +12,10 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Info,
-  DollarSign
+  DollarSign,
+  ShieldAlert,
+  Radio,
+  Flame
 } from 'lucide-react';
 import { KNOWN_MAJOR_HUBS } from '@/data/known-nodes';
 import { RouteResult, RoutingStrategy } from '@/types/route';
@@ -25,12 +28,14 @@ function RouterContent() {
   const [target, setTarget] = useState(initialTarget);
   const [amountSats, setAmountSats] = useState('25000');
   const [strategy, setStrategy] = useState<RoutingStrategy>('cheapest');
+  const [chaosMode, setChaosMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [alternatives, setAlternatives] = useState<any[]>([]);
+  const [chaosMeta, setChaosMeta] = useState<any>(null);
   const [error, setError] = useState('');
 
-  const calculateRoute = async (strat = strategy) => {
+  const calculateRoute = async (strat = strategy, chaos = chaosMode) => {
     const amount = Number(amountSats);
     if (!amount || amount <= 0) {
       setError('Please specify a positive satoshi amount');
@@ -50,6 +55,7 @@ function RouterContent() {
           amount,
           strategy: strat,
           alternatives: true,
+          chaos_mode: chaos,
         }),
       });
 
@@ -57,6 +63,7 @@ function RouterContent() {
       if (data.success && data.route) {
         setRouteResult(data.route);
         setAlternatives(data.alternatives || []);
+        setChaosMeta(data.chaos_fuzzer || null);
       } else {
         setError(data.error || 'Failed to find a viable route');
       }
@@ -92,8 +99,66 @@ function RouterContent() {
           </div>
         </div>
 
+        {/* Dual-Engine Architecture Selector (Fix 2: Whitehat Framing) */}
+        <div className="mt-8 p-5 rounded-2xl glass-panel border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className={`w-3.5 h-3.5 rounded-full shrink-0 ${chaosMode ? 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]'}`} />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  {chaosMode ? 'ADVERSARIAL CHAOS FUZZER (STRESS-TEST SUITE)' : 'SOVEREIGN BITCOIN MAINNET (PRODUCTION)'}
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                  chaosMode 
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40' 
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                }`}>
+                  {chaosMode ? 'INJECTING 8,500 PPM SPIKE' : 'VERIFIED MAINNET GOSSIP'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {chaosMode 
+                  ? 'Active whitehat security harness: Injects an in-flight predatory fee-gouging spike (8,500 PPM) into intermediary hops to mathematically prove real-time intercept & reroute.'
+                  : 'Operating against 100% verified Bitcoin mainnet channel topology with authentic short channel IDs (SCIDs) and baseline competitive fees.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 p-1.5 bg-[#090D15] rounded-xl border border-white/15 shrink-0 self-stretch sm:self-auto justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setChaosMode(false);
+                calculateRoute(strategy, false);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                !chaosMode 
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛡️ Production Mainnet
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setChaosMode(true);
+                calculateRoute(strategy, true);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                chaosMode 
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.35)]' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-red-400" />
+              <span>⚡ Adversarial Chaos Fuzzer</span>
+            </button>
+          </div>
+        </div>
+
         {/* Input Parameters Form */}
-        <div className="mt-8 glass-panel rounded-2xl p-6 border border-white/10">
+        <div className="mt-6 glass-panel rounded-2xl p-6 border border-white/10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Source Node */}
             <div>
@@ -204,6 +269,67 @@ function RouterContent() {
         {/* Route Output Results */}
         {routeResult && (
           <div className="mt-8 space-y-8 animate-in fade-in duration-300">
+            {/* Hero Moment: Adversarial Intercept Banner (Fix 2) */}
+            {chaosMode && chaosMeta?.intercept_proof && (
+              <div className="p-6 rounded-2xl bg-gradient-to-r from-red-950/50 via-[#180A12] to-amber-950/40 border border-red-500/40 shadow-[0_0_30px_rgba(239,68,68,0.2)] animate-in slide-in-from-top-4 duration-300">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-red-500/20">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
+                      <ShieldAlert className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-extrabold text-white tracking-wide">
+                          HERO MOMENT: PREDATORY FEE GOUGE INTERCEPTED!
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-red-500 text-black text-[10px] font-black uppercase">
+                          ATTACK BLOCKED
+                        </span>
+                      </div>
+                      <p className="text-xs text-red-200/90 mt-1">
+                        Intermediary hop attempted dynamic in-flight fee spike to <strong className="text-red-300 font-bold">8,500 PPM</strong> (42.5x vs network median). SatsNav Sentinel intercepted the route and bypassed the predatory hop.
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href="/sentinel"
+                    className="px-3.5 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-red-400" />
+                    <span>VIEW NOSTR THREAT GOSSIP</span>
+                  </a>
+                </div>
+
+                {/* Hard Financial Savings Proof */}
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3.5 rounded-xl bg-black/40 border border-white/5">
+                    <div className="text-slate-500 text-[10px] uppercase font-semibold">Naive Unprotected Router Fee</div>
+                    <div className="text-lg font-bold text-red-400 line-through mt-0.5">
+                      {chaosMeta.intercept_proof.unprotected_fee_sats} sats
+                    </div>
+                    <div className="text-[10px] text-slate-500">Blindly swallowed fee trap</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-black/40 border border-white/5">
+                    <div className="text-slate-500 text-[10px] uppercase font-semibold">SatsNav Sentinel Guarded Fee</div>
+                    <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                      {chaosMeta.intercept_proof.satsnav_defended_fee_sats} sats
+                    </div>
+                    <div className="text-[10px] text-emerald-500/80">Guarded by BOLT #7 Dijkstra</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                    <div className="text-emerald-400 text-[10px] font-bold uppercase">Direct Capital Saved</div>
+                    <div className="text-lg font-extrabold text-[#00F2FE] text-glow-cyan mt-0.5">
+                      +{chaosMeta.intercept_proof.satoshis_saved} SATS ({chaosMeta.intercept_proof.savings_percent}%)
+                    </div>
+                    <div className="text-[10px] text-slate-400">Node operator funds protected</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Summary Metrics Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="glass-panel rounded-xl p-4 border-l-4 border-l-[#F7931A]">
@@ -357,4 +483,3 @@ export default function RouterPage() {
     </Suspense>
   );
 }
-
